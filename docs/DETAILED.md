@@ -26,6 +26,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 18. [Migrations cookbook](#18-migrations-cookbook)
 19. [Cookbook: common future edits](#19-cookbook-common-future-edits)
 20. [Known limitations and recommended improvements](#20-known-limitations-and-recommended-improvements)
+21. [Goodreads covers and Missing covers page](#21-goodreads-covers-and-missing-covers-page)
 
 ---
 
@@ -63,7 +64,9 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/routes/admin/lookup.ts` | Autocomplete for forms |
 | `src/routes/admin/import.ts` | CSV preview + import |
 | `src/routes/admin/stats.ts` | Dashboard stat endpoints |
-| `src/services/bookService.ts` | Core book logic, serialization, filters |
+| `src/routes/admin/goodreads.ts` | Fetch cover URL from Goodreads book page |
+| `src/services/goodreadsService.ts` | Scrape `og:image` from Goodreads show page |
+| `src/services/bookService.ts` | Core book logic, serialization, filters, missing covers |
 | `src/services/authorService.ts` | Author CRUD |
 | `src/services/publisherService.ts` | Publisher CRUD |
 | `src/services/lookupService.ts` | Lightweight lists for pickers |
@@ -105,8 +108,9 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/components/books/BookCard.tsx` | Catalog card |
 | `src/components/admin/*` | Forms, tables, import UI pieces |
 | `src/pages/public/*` | Catalog + wishlist pages |
-| `src/pages/admin/*` | All admin screens |
-| `src/lib/*` | API wrappers |
+| `src/pages/admin/*` | All admin screens (incl. `MissingCoversPage.tsx`) |
+| `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, …) |
+| `src/utils/formatElapsed.ts` | Timer display for bulk cover fetch |
 | `src/constants/*` | Enums labels, pagination, CSV fields |
 | `src/types/index.ts` | Shared TS interfaces |
 | `vite.config.ts` | `@/` alias, `/api` proxy |
@@ -342,6 +346,9 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | PATCH | `/:id/visibility` | `{ isPubliclyVisible }` |
 | PATCH | `/bulk-visibility` | `{ ids[], isPubliclyVisible }` |
 | DELETE | `/bulk-delete` | `{ ids[] }` |
+| GET | `/missing-covers/summary` | `?collection=all\|library\|to_purchase` — counts without cover |
+| GET | `/missing-covers` | Paginated list of books missing `coverImageUrl` |
+| POST | `/bulk-fetch-covers` | Server-side bulk fetch (optional; UI uses client-side loop) |
 
 **List query highlights** (`bookListQuerySchema`):
 
@@ -408,6 +415,14 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | `/pages` | Page count stats |
 | `/lists` | Misc list stats |
 
+### Admin Goodreads (`/api/admin/goodreads`)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/cover/:bookId` | Numeric Goodreads Book Id → `{ coverUrl, goodreadsBookId, goodreadsUrl }` |
+
+**Implementation:** `goodreadsService.ts` fetches `https://www.goodreads.com/book/show/{id}`, parses Open Graph `og:image`. Validates ids with `isValidGoodreadsBookId` (digits only).
+
 ---
 
 ## 7. Server architecture
@@ -437,6 +452,9 @@ HTTP Request
 | `updateBook` | Partial update; replace additional authors / shelves if provided |
 | `setBookVisibility` | Toggle `isPubliclyVisible` |
 | `bulkSetVisibility` / `bulkDeleteBooks` | Batch ops |
+| `getMissingCoversSummary` | Counts books without cover, with/without valid Goodreads Id |
+| `listBooksMissingCovers` | Paginated missing-cover list; optional `withGoodreadsIdOnly` filter |
+| `bulkFetchGoodreadsCovers` | Server loop with ~800ms delay (used by API; admin UI may fetch client-side) |
 | `listPublicAuthors` etc. | Filter lists for public catalog |
 
 ### Author/publisher resolution on create/update
@@ -476,7 +494,7 @@ HTTP Request
 
 **Admin app** — `ProtectedRoute` → `AdminLayout`:
 
-- Dashboard, books, to-purchase, authors, publishers, import, settings
+- Dashboard, books, to-purchase, authors, publishers, import, missing-covers, settings
 - Shared `BookFormPage` for `/admin/books/new`, `/admin/books/:id/edit`, `/admin/to-purchase/new`, `/admin/to-purchase/:id/edit`
 
 ### Path detection in `BookFormPage`
@@ -511,7 +529,7 @@ HTTP Request
 #### `AdminLayout.tsx`
 
 - Desktop sidebar + mobile hamburger drawer
-- `navItems` array drives menu (Dashboard, Books, To Purchase, Authors, Publishers, Import, Settings)
+- `navItems` array drives menu (Dashboard, Books, To Purchase, Authors, Publishers, Import, Missing covers, Settings)
 - `pageTitles` for header title; special cases for `/new` and `/edit` paths
 - Logout clears auth and redirects to login
 - “View public catalog” link to `/`
@@ -547,7 +565,7 @@ HTTP Request
 
 **Change default page size:** `DEFAULT_PAGE_SIZE` in `constants/pagination.ts`.
 
-**Change default view:** `useState<ViewMode>("table")` in `AdminBooksList.tsx`.
+**Change default view:** `useState<ViewMode>("grid")` in `AdminBooksList.tsx` (grid is default; table for inline edit).
 
 #### `AdminBooksTable.tsx`
 
@@ -583,6 +601,7 @@ HTTP Request
 - `defaultToPurchase`, `backPath` props
 - `formToPayload` builds API body (author by id or name, etc.)
 - Checkbox: **To purchase** + **Publicly visible** (label depends on `toPurchase`)
+- **Goodreads Book Id** (`externalId`) + **Fetch cover** button → `GET /api/admin/goodreads/cover/:id` → sets `coverImageUrl`
 - Mutations: `createBook`, `updateBook`, `deleteBook`
 
 **Add form field:**
@@ -613,6 +632,15 @@ HTTP Request
 
 - Dashboard layout wrappers for Recharts
 
+#### `MissingCoversPage.tsx`
+
+- Route: `/admin/missing-covers`
+- Summary cards: total missing, fetchable (valid Goodreads Id), no Id
+- **Fetch all with Goodreads Id**: client-side sequential fetch (~800ms between books) so UI can update live
+- Live **elapsed timer** (`formatElapsed`) and **Fetched X of Y** progress bar
+- After each success: updates TanStack Query cache (summary + table row removed without full page reload)
+- Per-row **Fetch** uses same Goodreads + `updateBook` flow as the book form
+
 ---
 
 ## 10. Page responsibilities
@@ -638,6 +666,7 @@ HTTP Request
 | Authors | `AuthorsPage.tsx` | `EntityManageTable` + author API |
 | Publishers | `PublishersPage.tsx` | Same for publishers |
 | Import | `ImportPage.tsx` | 4-step wizard: upload → preview → settings → report |
+| Missing covers | `MissingCoversPage.tsx` | Books without `coverImageUrl`; Goodreads bulk/single fetch |
 | Settings | `SettingsPage.tsx` | Change password |
 
 ### Import wizard steps (`ImportPage.tsx`)
@@ -655,7 +684,8 @@ HTTP Request
 |--------|---------|---------------|
 | `api.ts` | `apiFetch`, `ApiError`, `checkHealth` | Generic |
 | `auth.ts` | `login`, `getMe`, `changePassword`, token helpers | `/auth/*` |
-| `books.ts` | List, CRUD, visibility, `moveBookToLibrary` | `/books`, `/to-purchase`, `/admin/books` |
+| `books.ts` | List, CRUD, visibility, `moveBookToLibrary`, missing covers, `hasGoodreadsBookId` | `/books`, `/to-purchase`, `/admin/books` |
+| `goodreads.ts` | `fetchGoodreadsCover(bookId)` | `/admin/goodreads/cover/:bookId` |
 | `entities.ts` | Author/publisher CRUD | `/admin/authors`, `/admin/publishers` |
 | `lookup.ts` | `fetchAdminAuthors`, etc. | `/admin/lookup/*` |
 | `stats.ts` | One function per stat endpoint | `/admin/stats/*` |
@@ -827,9 +857,9 @@ CLIENT_URL=https://<your-frontend-domain>
 ### Frontend service
 
 - Root: `client`
-- Build: `npm install && npm run build`
-- Serve `dist/` (static)
-- Variable: `VITE_API_URL=https://<backend>/api`
+- Build: `npm install && npm run build` (see `client/railway.toml`)
+- Nixpacks serves `dist/` with **Caddy** (do not set `vite preview` as start command)
+- Variable: `VITE_API_URL=https://<backend>/api` (must include `https://` and `/api` path)
 
 ### Root `railway.toml`
 
@@ -939,6 +969,52 @@ Would need: new auth provider, user model changes, new routes — start from `au
 | Rate limits | 300 req/15min API | Tune in `rateLimiter.ts` |
 | `externalId` duplicates | Import skip/overwrite logic | Document in import UI |
 | Grid vs table feature parity | Grid has quick visibility; table edits Public column | Align or document |
+| Goodreads rate limits | Scraping book pages; ~800ms delay in bulk | Respect Goodreads ToS; consider official API later |
+| Bulk fetch on Missing covers | Runs in browser (one book per request) | Keeps UI live; long lists need tab left open |
+
+---
+
+## 21. Goodreads covers and Missing covers page
+
+### Goodreads Book Id
+
+Stored as `Book.externalId` (unique). CSV import maps column **Book Id** to this field. Must be **numeric** for fetch (`isValidGoodreadsBookId`).
+
+### Where to fetch covers
+
+| UI | Flow |
+|----|------|
+| Book form | Enter Id → **Fetch cover** → fills `coverImageUrl` (save form to persist) |
+| Missing covers | Row **Fetch** or **Fetch all with Goodreads Id** |
+
+### Missing covers API
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET .../missing-covers/summary?collection=` | `{ totalMissing, withGoodreadsId, withoutGoodreadsId }` |
+| `GET .../missing-covers?...` | Paginated books where `coverImageUrl` is null/empty |
+| `POST .../bulk-fetch-covers` | Server-side bulk (optional; page uses client loop for live UI) |
+
+Query params for list: `page`, `limit`, `search`, `collection`, `withGoodreadsIdOnly` (`true`/`false`).
+
+### Client bulk fetch behavior
+
+1. Paginate through all fetchable books (`withGoodreadsIdOnly: true`, `limit: 100`)
+2. For each: `fetchGoodreadsCover` → `updateBook` with `coverImageUrl`
+3. Update summary + remove row from list via `queryClient.setQueryData`
+4. Show elapsed clock and **Fetched X of Y** until complete
+
+**Edit delay:** `BULK_FETCH_DELAY_MS` in `MissingCoversPage.tsx` (800).
+
+### Files to touch
+
+| Change | Files |
+|--------|-------|
+| Goodreads scrape logic | `server/src/services/goodreadsService.ts` |
+| Cover API route | `server/src/routes/admin/goodreads.ts` |
+| Missing covers data | `server/src/services/bookService.ts`, `validators/book.ts`, `routes/admin/books.ts` |
+| Admin UI | `MissingCoversPage.tsx`, `AdminLayout.tsx`, `App.tsx` |
+| Form button | `BookForm.tsx`, `lib/goodreads.ts` |
 
 ---
 
@@ -961,6 +1037,7 @@ Would need: new auth provider, user model changes, new routes — start from `au
 | `/admin/authors` | `pages/admin/AuthorsPage.tsx` |
 | `/admin/publishers` | `pages/admin/PublishersPage.tsx` |
 | `/admin/import` | `pages/admin/ImportPage.tsx` |
+| `/admin/missing-covers` | `pages/admin/MissingCoversPage.tsx` |
 | `/admin/settings` | `pages/admin/SettingsPage.tsx` |
 
 ---
@@ -986,6 +1063,10 @@ Would need: new auth provider, user model changes, new routes — start from `au
 | * | `/api/admin/lookup/*` | `routes/admin/lookup.ts` |
 | * | `/api/admin/import/*` | `routes/admin/import.ts` |
 | * | `/api/admin/stats/*` | `routes/admin/stats.ts` |
+| GET | `/api/admin/goodreads/cover/:bookId` | `routes/admin/goodreads.ts` |
+| GET | `/api/admin/books/missing-covers/summary` | `routes/admin/books.ts` |
+| GET | `/api/admin/books/missing-covers` | `routes/admin/books.ts` |
+| POST | `/api/admin/books/bulk-fetch-covers` | `routes/admin/books.ts` |
 
 ---
 
@@ -1041,6 +1122,13 @@ Use this when onboarding or auditing completeness.
 **Phase 10 — GitHub hygiene**
 
 - `.gitignore`, `SECURITY.md`, `docs/`, env examples
+
+**Phase 11 — Goodreads covers**
+
+- `goodreadsService.ts`, `routes/admin/goodreads.ts`
+- `bookService.ts` missing-cover helpers, `MissingCoversPage.tsx`
+- `BookForm.tsx` Fetch cover, `lib/goodreads.ts`
+- `AdminBooksList.tsx` default **grid** view
 
 ---
 

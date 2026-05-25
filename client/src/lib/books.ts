@@ -132,3 +132,61 @@ export function toggleBookVisibility(id: string, isPubliclyVisible: boolean) {
     body: JSON.stringify({ isPubliclyVisible }),
   });
 }
+
+export type MissingCoversCollection = "all" | "library" | "to_purchase";
+
+export interface MissingCoversSummary {
+  totalMissing: number;
+  withGoodreadsId: number;
+  withoutGoodreadsId: number;
+}
+
+export interface MissingCoversParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  collection?: MissingCoversCollection;
+  withGoodreadsIdOnly?: boolean;
+}
+
+export interface BulkFetchCoversReport {
+  attempted: number;
+  updated: number;
+  skipped: number;
+  failed: { id: string; title: string; message: string }[];
+}
+
+export function fetchMissingCoversSummary(collection: MissingCoversCollection = "all") {
+  return apiFetch<MissingCoversSummary>(
+    `/admin/books/missing-covers/summary?collection=${collection}`,
+  );
+}
+
+export function fetchBooksMissingCovers(params: MissingCoversParams = {}) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const qs = search.toString();
+  return fetchBookList(
+    `/admin/books/missing-covers${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export function bulkFetchGoodreadsCovers(body: {
+  bookIds?: string[];
+  collection?: MissingCoversCollection;
+  onlyWithGoodreadsId?: boolean;
+}) {
+  return apiFetch<BulkFetchCoversReport>("/admin/books/bulk-fetch-covers", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Numeric Goodreads Book Id (CSV "Book Id") */
+export function hasGoodreadsBookId(externalId: string | null | undefined): boolean {
+  return !!externalId?.trim() && /^\d+$/.test(externalId.trim());
+}

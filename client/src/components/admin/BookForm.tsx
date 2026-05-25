@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ImageDown } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Book, BookFormat, BindingType, ReadingStatus } from "@/types";
 import {
@@ -15,6 +16,7 @@ import {
   fetchAdminBookshelves,
 } from "@/lib/lookup";
 import { createBook, updateBook, deleteBook } from "@/lib/books";
+import { fetchGoodreadsCover } from "@/lib/goodreads";
 import { ApiError } from "@/lib/api";
 import { FormSection, FormField, inputClass } from "./FormSection";
 import { EntityPicker } from "./EntityPicker";
@@ -198,6 +200,7 @@ export function BookForm({
   const [form, setForm] = useState<FormState>(() =>
     book ? bookToFormState(book) : emptyForm(defaultToPurchase),
   );
+  const [fetchingCover, setFetchingCover] = useState(false);
 
   useEffect(() => {
     if (book) setForm(bookToFormState(book));
@@ -250,6 +253,26 @@ export function BookForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleFetchGoodreadsCover = async () => {
+    const bookId = form.externalId.trim();
+    if (!/^\d+$/.test(bookId)) {
+      toast.error("Enter a numeric Goodreads Book Id first");
+      return;
+    }
+    setFetchingCover(true);
+    try {
+      const result = await fetchGoodreadsCover(bookId);
+      set("coverImageUrl", result.coverUrl);
+      toast.success("Cover loaded from Goodreads");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Could not fetch Goodreads cover",
+      );
+    } finally {
+      setFetchingCover(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent, addAnother = false) => {
     e.preventDefault();
     if (!form.author.name.trim()) {
@@ -279,12 +302,27 @@ export function BookForm({
             dir="auto"
           />
         </FormField>
-        <FormField label="External ID (Goodreads)">
-          <input
-            value={form.externalId}
-            onChange={(e) => set("externalId", e.target.value)}
-            className={inputClass}
-          />
+        <FormField label="Goodreads Book Id" className="sm:col-span-2">
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={form.externalId}
+              onChange={(e) => set("externalId", e.target.value)}
+              className={`${inputClass} min-w-[12rem] flex-1`}
+              placeholder="e.g. 9285857 (from CSV “Book Id”)"
+            />
+            <button
+              type="button"
+              disabled={fetchingCover || !form.externalId.trim()}
+              onClick={() => void handleFetchGoodreadsCover()}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <ImageDown className="h-4 w-4" aria-hidden />
+              {fetchingCover ? "Fetching…" : "Fetch cover"}
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Uses the Goodreads book page to find the cover image URL.
+          </p>
         </FormField>
         <div className="sm:col-span-2">
           <span className="mb-2 block text-sm font-medium text-gray-700">
@@ -531,13 +569,26 @@ export function BookForm({
 
       <FormSection title="Additional">
         <FormField label="Cover image URL" className="sm:col-span-2">
-          <input
-            type="url"
-            value={form.coverImageUrl}
-            onChange={(e) => set("coverImageUrl", e.target.value)}
-            className={inputClass}
-            placeholder="https://…"
-          />
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="url"
+              value={form.coverImageUrl}
+              onChange={(e) => set("coverImageUrl", e.target.value)}
+              className={`${inputClass} min-w-[12rem] flex-1`}
+              placeholder="https://… or use Fetch cover above"
+            />
+            {form.externalId.trim() && (
+              <button
+                type="button"
+                disabled={fetchingCover}
+                onClick={() => void handleFetchGoodreadsCover()}
+                className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                <ImageDown className="h-4 w-4" aria-hidden />
+                {fetchingCover ? "…" : "From Goodreads"}
+              </button>
+            )}
+          </div>
           {form.coverImageUrl && (
             <img
               src={form.coverImageUrl}

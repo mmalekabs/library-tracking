@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   ShoppingCart,
+  ImageOff,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -22,6 +23,7 @@ const navItems = [
   { to: "/admin/authors", label: "Authors", icon: Users, end: false },
   { to: "/admin/publishers", label: "Publishers", icon: Building2, end: false },
   { to: "/admin/import", label: "Import", icon: Upload, end: false },
+  { to: "/admin/missing-covers", label: "Missing covers", icon: ImageOff, end: false },
   { to: "/admin/settings", label: "Settings", icon: Settings, end: false },
 ];
 
@@ -32,6 +34,7 @@ const pageTitles: Record<string, string> = {
   "/admin/authors": "Authors",
   "/admin/publishers": "Publishers",
   "/admin/import": "Import CSV",
+  "/admin/missing-covers": "Missing covers",
   "/admin/settings": "Settings",
 };
 

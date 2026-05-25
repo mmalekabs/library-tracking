@@ -102,13 +102,19 @@ Login at `/admin/login`. After login:
 | **Authors** | Create/rename/delete authors |
 | **Publishers** | Create/rename/delete publishers |
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
+| **Missing covers** | List books without cover images; bulk or single fetch from Goodreads |
 | **Settings** | Change admin password |
 
 **Books / To Purchase UI:**
 
-- **Table view** (default): click a cell to edit; click outside the table → confirmation modal if changed
-- **Grid view**: cards with visibility / delete / add-to-library actions
+- **Grid view** (default): cards with visibility / delete / add-to-library actions
+- **Table view**: click a cell to edit; click outside the table → confirmation modal if changed
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
+
+**Covers from Goodreads:**
+
+- On the book form, set **Goodreads Book Id** (`externalId`, same as CSV “Book Id”) and use **Fetch cover**
+- On **Missing covers**, fetch one row or **Fetch all with Goodreads Id** — live timer and progress counts update without reloading the page
 
 ---
 
@@ -164,6 +170,7 @@ The project was built incrementally:
 | 8 | To Purchase collection + public wishlist |
 | 9 | Admin table view + inline edit + pagination |
 | 10 | GitHub-ready secrets handling (`SECURITY.md`, `.gitignore`) |
+| 11 | Goodreads cover fetch (form + Missing covers page with live progress) |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 

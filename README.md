@@ -138,8 +138,17 @@ You can run the client before Railway is ready — the catalog page will show **
 | 5 | Book add/edit form + CSV import | ✅ Done |
 | 6 | Statistics dashboard | ✅ Done |
 | 7 | Authors / publishers management + mobile admin nav | ✅ Done |
+| 8 | To Purchase collection + public wishlist | ✅ Done |
+| 9 | Admin grid/table views, inline table edit, pagination | ✅ Done |
+| 10 | Goodreads cover fetch + Missing covers admin page | ✅ Done |
 
 See `LIBRARY_APP_SPEC.pdf` for the full specification.
+
+### Admin highlights
+
+- **Books** and **To Purchase** default to **grid view** (switch to table for inline editing)
+- **Missing covers** (`/admin/missing-covers`) — fetch covers from Goodreads when **Book Id** is set; bulk run shows a live timer and fetched count
+- **Fetch cover** on the book form uses the same Goodreads Book Id field
 
 ## Documentation
 
@@ -185,6 +194,8 @@ Configure these in the **Railway dashboard** (Variables), not in the repository:
 | `JWT_SECRET` | Backend |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Backend |
 | `CLIENT_URL` | Backend (your public frontend URL) |
-| `VITE_API_URL` | Frontend (optional; your public API URL + `/api`) |
+| `VITE_API_URL` | Frontend (**build time**; full URL e.g. `https://your-api.up.railway.app/api`) |
+
+Frontend service: set **Root Directory** to `client`. Nixpacks serves the Vite build with Caddy (`client/railway.toml`) — do not use `vite preview` in production.
 
 After deploy, run `npm run db:seed` once (or via Railway shell) so the admin password hash matches `ADMIN_PASSWORD`.

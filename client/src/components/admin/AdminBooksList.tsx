@@ -56,7 +56,7 @@ const config: Record<
 export function AdminBooksList({ collection }: AdminBooksListProps) {
   const cfg = config[collection];
   const queryClient = useQueryClient();
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
