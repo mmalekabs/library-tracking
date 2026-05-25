@@ -4,9 +4,12 @@ import { AppError } from "../middleware/errorHandler.js";
 import { calculateSavings, decimalToNumber } from "../utils/book.js";
 import type {
   BookListQuery,
+  BulkFetchCoversInput,
   CreateBookInput,
+  MissingCoversQuery,
   UpdateBookInput,
 } from "../validators/book.js";
+import * as goodreadsService from "./goodreadsService.js";
 
 export const bookInclude = {
   author: { select: { id: true, name: true } },
@@ -550,4 +553,192 @@ export async function listPublicBookshelves() {
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+function missingCoverWhere(): Prisma.BookWhereInput {
+  return {
+    OR: [{ coverImageUrl: null }, { coverImageUrl: "" }],
+  };
+}
+
+function collectionWhere(
+  collection: MissingCoversQuery["collection"] | BulkFetchCoversInput["collection"],
+): Prisma.BookWhereInput {
+  if (collection === "library") return { toPurchase: false };
+  if (collection === "to_purchase") return { toPurchase: true };
+  return {};
+}
+
+function buildMissingCoversWhere(
+  query: Pick<MissingCoversQuery, "collection" | "search">,
+): Prisma.BookWhereInput {
+  const where: Prisma.BookWhereInput = {
+    ...missingCoverWhere(),
+    ...collectionWhere(query.collection),
+  };
+
+  if (query.search?.trim()) {
+    const term = query.search.trim();
+    where.AND = [
+      {
+        OR: [
+          { title: { contains: term, mode: "insensitive" } },
+          { externalId: { contains: term, mode: "insensitive" } },
+          { author: { name: { contains: term, mode: "insensitive" } } },
+        ],
+      },
+    ];
+  }
+
+  return where;
+}
+
+export async function getMissingCoversSummary(
+  collection: MissingCoversQuery["collection"] = "all",
+) {
+  const base = { ...missingCoverWhere(), ...collectionWhere(collection) };
+  const [totalMissing, withIdRows] = await Promise.all([
+    prisma.book.count({ where: base }),
+    prisma.book.findMany({
+      where: base,
+      select: { externalId: true },
+    }),
+  ]);
+
+  const withGoodreadsId = withIdRows.filter((b) =>
+    goodreadsService.isValidGoodreadsBookId(b.externalId),
+  ).length;
+
+  return {
+    totalMissing,
+    withGoodreadsId,
+    withoutGoodreadsId: totalMissing - withGoodreadsId,
+  };
+}
+
+export async function listBooksMissingCovers(query: MissingCoversQuery) {
+  const where = buildMissingCoversWhere(query);
+
+  if (query.withGoodreadsIdOnly) {
+    const all = await prisma.book.findMany({
+      where,
+      orderBy: { title: "asc" },
+      include: bookInclude,
+    });
+    const filtered = all.filter((b) =>
+      goodreadsService.isValidGoodreadsBookId(b.externalId),
+    );
+    const skip = (query.page - 1) * query.limit;
+    const page = filtered.slice(skip, skip + query.limit);
+    return {
+      books: page.map((b) =>
+        serializeBook(b, { includePricing: false, includeAdminFields: true }),
+      ),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalItems: filtered.length,
+        totalPages: Math.ceil(filtered.length / query.limit) || 1,
+      },
+    };
+  }
+
+  const skip = (query.page - 1) * query.limit;
+  const [books, totalItems] = await Promise.all([
+    prisma.book.findMany({
+      where,
+      skip,
+      take: query.limit,
+      orderBy: { title: "asc" },
+      include: bookInclude,
+    }),
+    prisma.book.count({ where }),
+  ]);
+
+  return {
+    books: books.map((b) =>
+      serializeBook(b, { includePricing: false, includeAdminFields: true }),
+    ),
+    pagination: {
+      page: query.page,
+      limit: query.limit,
+      totalItems,
+      totalPages: Math.ceil(totalItems / query.limit) || 1,
+    },
+  };
+}
+
+const BULK_FETCH_DELAY_MS = 800;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function bulkFetchGoodreadsCovers(input: BulkFetchCoversInput) {
+  let books: { id: string; title: string; externalId: string | null }[];
+
+  if (input.bookIds?.length) {
+    books = await prisma.book.findMany({
+      where: {
+        id: { in: input.bookIds },
+        ...missingCoverWhere(),
+      },
+      select: { id: true, title: true, externalId: true },
+      orderBy: { title: "asc" },
+    });
+  } else {
+    const where: Prisma.BookWhereInput = {
+      ...missingCoverWhere(),
+      ...collectionWhere(input.collection),
+    };
+    books = await prisma.book.findMany({
+      where,
+      select: { id: true, title: true, externalId: true },
+      orderBy: { title: "asc" },
+    });
+  }
+
+  const targets = input.onlyWithGoodreadsId
+    ? books.filter((b) => goodreadsService.isValidGoodreadsBookId(b.externalId))
+    : books;
+
+  const report = {
+    attempted: targets.length,
+    updated: 0,
+    skipped: 0,
+    failed: [] as { id: string; title: string; message: string }[],
+  };
+
+  for (let i = 0; i < targets.length; i++) {
+    const book = targets[i];
+    const bookId = book.externalId?.trim();
+
+    if (!goodreadsService.isValidGoodreadsBookId(bookId)) {
+      report.skipped++;
+      continue;
+    }
+
+    try {
+      const coverUrl = await goodreadsService.fetchCoverUrlByBookId(bookId!);
+      await prisma.book.update({
+        where: { id: book.id },
+        data: { coverImageUrl: coverUrl },
+      });
+      report.updated++;
+    } catch (err) {
+      const message =
+        err instanceof AppError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
+      report.failed.push({ id: book.id, title: book.title, message });
+    }
+
+    if (i < targets.length - 1) {
+      await delay(BULK_FETCH_DELAY_MS);
+    }
+  }
+
+  return report;
 }

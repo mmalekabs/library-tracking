@@ -5,11 +5,16 @@ import * as bookService from "../../services/bookService.js";
 import {
   bookListQuerySchema,
   bulkDeleteSchema,
+  bulkFetchCoversSchema,
   bulkVisibilitySchema,
   createBookSchema,
+  missingCoversQuerySchema,
   updateBookSchema,
   visibilitySchema,
   type BookListQuery,
+  missingCoversSummaryQuerySchema,
+  type MissingCoversQuery,
+  type MissingCoversSummaryQuery,
 } from "../../validators/book.js";
 import { validateBody } from "../../validators/validate.js";
 import { validateQuery } from "../../validators/query.js";
@@ -56,6 +61,38 @@ router.delete(
     const { ids } = req.body;
     const result = await bookService.bulkDeleteBooks(ids);
     sendSuccess(res, result);
+  }),
+);
+
+router.get(
+  "/missing-covers/summary",
+  validateQuery(missingCoversSummaryQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { collection } = (
+      req as typeof req & { validatedQuery: MissingCoversSummaryQuery }
+    ).validatedQuery;
+    const summary = await bookService.getMissingCoversSummary(collection);
+    sendSuccess(res, summary);
+  }),
+);
+
+router.get(
+  "/missing-covers",
+  validateQuery(missingCoversQuerySchema),
+  asyncHandler(async (req, res) => {
+    const query = (req as typeof req & { validatedQuery: MissingCoversQuery })
+      .validatedQuery;
+    const { books, pagination } = await bookService.listBooksMissingCovers(query);
+    sendPaginated(res, books, pagination);
+  }),
+);
+
+router.post(
+  "/bulk-fetch-covers",
+  validateBody(bulkFetchCoversSchema),
+  asyncHandler(async (req, res) => {
+    const report = await bookService.bulkFetchGoodreadsCovers(req.body);
+    sendSuccess(res, report);
   }),
 );
 

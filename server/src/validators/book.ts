@@ -147,5 +147,33 @@ export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });
 
+export const missingCoversQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  search: z.string().optional(),
+  collection: z.enum(["all", "library", "to_purchase"]).default("all"),
+  /** When true, only books with a numeric Goodreads Book Id */
+  withGoodreadsIdOnly: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? false : v === "true")),
+});
+
+export const bulkFetchCoversSchema = z.object({
+  bookIds: z.array(z.string().min(1)).optional(),
+  collection: z.enum(["all", "library", "to_purchase"]).default("all"),
+  onlyWithGoodreadsId: z.boolean().default(true),
+});
+
+export const missingCoversSummaryQuerySchema = z.object({
+  collection: z.enum(["all", "library", "to_purchase"]).default("all"),
+});
+
+export type MissingCoversQuery = z.infer<typeof missingCoversQuerySchema>;
+export type MissingCoversSummaryQuery = z.infer<
+  typeof missingCoversSummaryQuerySchema
+>;
+export type BulkFetchCoversInput = z.infer<typeof bulkFetchCoversSchema>;
+
 export type CreateBookInput = z.infer<typeof createBookSchema>;
 export type UpdateBookInput = z.infer<typeof updateBookSchema>;

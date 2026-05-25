@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
-import type { ZodSchema } from "zod";
+import { z, type ZodType } from "zod";
 import { AppError } from "../middleware/errorHandler.js";
 
-export function validateQuery<T>(schema: ZodSchema<T>) {
+export function validateQuery<T>(schema: ZodType<T, z.ZodTypeDef, unknown>) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.query);
 
