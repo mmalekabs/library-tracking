@@ -1,10 +1,12 @@
 # Railway frontend service — set Root Directory to "client" in service settings.
+#
+# Do NOT set a custom startCommand. Nixpacks detects this Vite SPA and runs
+# Caddy to serve client/dist in production (vite preview is dev-only and breaks healthchecks).
 
 [build]
 builder = "nixpacks"
 buildCommand = "npm install && npm run build"
 
 [deploy]
-startCommand = "npx vite preview --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/"
 healthcheckTimeout = 100
