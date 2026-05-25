@@ -1,0 +1,7 @@
+# Monorepo note: configure each Railway service separately.
+# - Backend: set Root Directory to "server" (uses server/railway.toml)
+# - Frontend: set Root Directory to "client"
+# - Postgres: Railway plugin (no root directory)
+
+[build]
+builder = "nixpacks"

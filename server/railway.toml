@@ -1,0 +1,15 @@
+# Railway backend service — set Root Directory to "server" in the service settings.
+
+[build]
+builder = "nixpacks"
+# Do NOT run migrations here — private network is unavailable at build time.
+buildCommand = "npm install && npx prisma generate && npm run build"
+
+[deploy]
+# Runs on Railway infrastructure where postgres.railway.internal is reachable.
+preDeployCommand = "npx prisma migrate deploy"
+startCommand = "npm run start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

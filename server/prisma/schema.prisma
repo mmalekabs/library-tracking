@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────
+
+enum BookFormat {
+  PHYSICAL
+  DIGITAL
+  AUDIO
+}
+
+enum ReadingStatus {
+  TO_READ
+  READING
+  READ
+  DID_NOT_FINISH
+  ON_HOLD
+}
+
+enum BindingType {
+  PAPERBACK
+  HARDCOVER
+  MASS_MARKET_PAPERBACK
+  KINDLE_EDITION
+  UNKNOWN
+}
+
+// ─── MODELS ───────────────────────────────────────────
+
+model Admin {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Author {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  booksAsPrimary    Book[]                 @relation("PrimaryAuthor")
+  booksAsAdditional BookAdditionalAuthor[]
+}
+
+model Publisher {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  books Book[]
+}
+
+model Bookshelf {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  books BookBookshelf[]
+}
+
+model Book {
+  id         String  @id @default(cuid())
+  externalId String? @unique
+  title      String
+  isbn       String?
+  isbn13     String?
+
+  purchasePrice Decimal? @db.Decimal(10, 2)
+  marketPrice   Decimal? @db.Decimal(10, 2)
+  currency      String   @default("SAR")
+
+  format                  BookFormat  @default(PHYSICAL)
+  binding                 BindingType @default(PAPERBACK)
+  numberOfPages           Int?
+  yearPublished           Int?
+  originalPublicationYear Int?
+  edition                 String?
+
+  status              ReadingStatus @default(TO_READ)
+  dateAdded           DateTime      @default(now())
+  dateStartedReading  DateTime?
+  dateFinishedReading DateTime?
+
+  isPubliclyVisible Boolean @default(true)
+  toPurchase        Boolean @default(false)
+  coverImageUrl     String?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId String
+  author   Author @relation("PrimaryAuthor", fields: [authorId], references: [id])
+
+  additionalAuthors BookAdditionalAuthor[]
+  publisherId       String?
+  publisher         Publisher?             @relation(fields: [publisherId], references: [id])
+  bookshelves       BookBookshelf[]
+
+  @@index([title])
+  @@index([status])
+  @@index([format])
+  @@index([isPubliclyVisible])
+  @@index([toPurchase])
+  @@index([authorId])
+  @@index([publisherId])
+}
+
+model BookAdditionalAuthor {
+  bookId   String
+  authorId String
+  book     Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author   Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, authorId])
+}
+
+model BookBookshelf {
+  bookId      String
+  bookshelfId String
+  book        Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookshelf   Bookshelf @relation(fields: [bookshelfId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, bookshelfId])
+}
