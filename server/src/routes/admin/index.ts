@@ -6,6 +6,7 @@ import lookupRouter from "./lookup.js";
 import importRouter from "./import.js";
 import statsRouter from "./stats.js";
 import goodreadsRouter from "./goodreads.js";
+import readingRouter from "./reading.js";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/stats", statsRouter);
 router.use("/import", importRouter);
 router.use("/lookup", lookupRouter);
 router.use("/goodreads", goodreadsRouter);
+router.use("/reading", readingRouter);
 
 export default router;

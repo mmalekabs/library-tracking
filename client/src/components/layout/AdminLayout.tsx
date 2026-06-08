@@ -13,12 +13,14 @@ import {
   X,
   ShoppingCart,
   ImageOff,
+  BookMarked,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/books", label: "Books", icon: Book, end: false },
+  { to: "/admin/reading", label: "Reading", icon: BookMarked, end: false },
   { to: "/admin/to-purchase", label: "To Purchase", icon: ShoppingCart, end: false },
   { to: "/admin/authors", label: "Authors", icon: Users, end: false },
   { to: "/admin/publishers", label: "Publishers", icon: Building2, end: false },
@@ -30,6 +32,7 @@ const navItems = [
 const pageTitles: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/books": "Books",
+  "/admin/reading": "Reading",
   "/admin/to-purchase": "To Purchase",
   "/admin/authors": "Authors",
   "/admin/publishers": "Publishers",

@@ -104,6 +104,7 @@ model Book {
   publisherId       String?
   publisher         Publisher?             @relation(fields: [publisherId], references: [id])
   bookshelves       BookBookshelf[]
+  readingEntries    ReadingEntry[]
 
   @@index([title])
   @@index([status])
@@ -130,4 +131,42 @@ model BookBookshelf {
   bookshelf   Bookshelf @relation(fields: [bookshelfId], references: [id], onDelete: Cascade)
 
   @@id([bookId, bookshelfId])
+}
+
+/// One read-through of a book (supports re-reads and full history).
+model ReadingEntry {
+  id          String        @id @default(cuid())
+  bookId      String
+  book        Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  status      ReadingStatus @default(READING)
+  startedAt   DateTime      @default(now())
+  finishedAt  DateTime?
+  currentPage Int?
+  rating      Int?
+  review      String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  sessions ReadingSession[]
+
+  @@index([bookId])
+  @@index([status])
+  @@index([startedAt])
+  @@index([finishedAt])
+}
+
+/// Daily reading log: pages and optional time spent.
+model ReadingSession {
+  id          String       @id @default(cuid())
+  entryId     String
+  entry       ReadingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  sessionDate DateTime     @db.Date
+  pagesRead   Int          @default(0)
+  minutesRead Int?
+  endPage     Int?
+  note        String?
+  createdAt   DateTime     @default(now())
+
+  @@index([entryId])
+  @@index([sessionDate])
 }
