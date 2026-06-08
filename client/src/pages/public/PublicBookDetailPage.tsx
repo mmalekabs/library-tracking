@@ -52,7 +52,7 @@ export function PublicBookDetailPage() {
             {book.title}
           </h1>
           <p className="mt-2 text-lg text-gray-600" dir="auto">
-            {book.author.name}
+            {book.author?.name ?? "—"}
             {book.additionalAuthors && book.additionalAuthors.length > 0 && (
               <span>
                 {" "}

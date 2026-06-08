@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Search, Trash2, X, Check } from "lucide-react";
+import { GitMerge, Pencil, Plus, Search, Trash2, X, Check } from "lucide-react";
 import toast from "react-hot-toast";
 import { ApiError } from "@/lib/api";
 import type { ManagedEntity } from "@/lib/entities";
@@ -9,21 +9,28 @@ import { inputClass } from "./FormSection";
 interface EntityManageTableProps {
   title: string;
   description: string;
+  entityLabel: string;
   queryKey: string;
   fetchList: (search: string) => Promise<ManagedEntity[]>;
   createItem: (name: string) => Promise<ManagedEntity>;
   updateItem: (id: string, name: string) => Promise<ManagedEntity>;
   deleteItem: (id: string) => Promise<{ message: string }>;
+  mergeItems?: (
+    targetId: string,
+    sourceIds: string[],
+  ) => Promise<{ mergedNames: string[] }>;
 }
 
 export function EntityManageTable({
   title,
   description,
+  entityLabel,
   queryKey,
   fetchList,
   createItem,
   updateItem,
   deleteItem,
+  mergeItems,
 }: EntityManageTableProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -31,6 +38,9 @@ export function EntityManageTable({
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState("");
 
   const handleSearch = (value: string) => {
     setSearch(value);
@@ -46,8 +56,12 @@ export function EntityManageTable({
     queryFn: () => fetchList(debouncedSearch),
   });
 
-  const invalidate = () =>
+  const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [queryKey] });
+    queryClient.invalidateQueries({ queryKey: ["books"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-authors"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-publishers"] });
+  };
 
   const createMutation = useMutation({
     mutationFn: () => createItem(newName.trim()),
@@ -82,17 +96,55 @@ export function EntityManageTable({
       toast.error(err instanceof ApiError ? err.message : "Delete failed"),
   });
 
+  const mergeMutation = useMutation({
+    mutationFn: () => {
+      const sourceIds = [...selectedIds].filter((id) => id !== mergeTargetId);
+      return mergeItems!(mergeTargetId, sourceIds);
+    },
+    onSuccess: (result) => {
+      setMergeOpen(false);
+      setSelectedIds(new Set());
+      setMergeTargetId("");
+      invalidate();
+      toast.success(
+        `Merged ${result.mergedNames.length} ${entityLabel}(s) into one`,
+      );
+    },
+    onError: (err) =>
+      toast.error(err instanceof ApiError ? err.message : "Merge failed"),
+  });
+
   const startEdit = (item: ManagedEntity) => {
     setEditingId(item.id);
     setEditName(item.name);
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedItems = items.filter((item) => selectedIds.has(item.id));
+  const canMerge = mergeItems && selectedIds.size >= 2;
+
+  const openMerge = () => {
+    if (selectedIds.size < 2) return;
+    const first = selectedItems[0];
+    setMergeTargetId(first?.id ?? "");
+    setMergeOpen(true);
+  };
+
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-      <p className="mt-1 text-sm text-gray-600">{description}</p>
+      <div className="sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200/80 bg-gray-100 px-4 pb-4 md:top-16 md:-mx-8 md:px-8">
+        <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+        <p className="mt-1 text-sm text-gray-600">{description}</p>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
         <div className="relative min-w-[200px] flex-1 max-w-md">
           <Search
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
@@ -130,12 +182,29 @@ export function EntityManageTable({
             Add
           </button>
         </form>
+        {mergeItems && (
+          <button
+            type="button"
+            disabled={!canMerge}
+            onClick={openMerge}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+          >
+            <GitMerge className="h-4 w-4" aria-hidden />
+            Merge selected ({selectedIds.size})
+          </button>
+        )}
+        </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full text-sm">
           <thead className="border-b bg-gray-50 text-left text-gray-600">
             <tr>
+              {mergeItems && (
+                <th className="w-10 px-4 py-3 font-medium">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Books</th>
               <th className="px-4 py-3 font-medium text-right">Actions</th>
@@ -144,20 +213,36 @@ export function EntityManageTable({
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                <td
+                  colSpan={mergeItems ? 4 : 3}
+                  className="px-4 py-8 text-center text-gray-500"
+                >
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                <td
+                  colSpan={mergeItems ? 4 : 3}
+                  className="px-4 py-8 text-center text-gray-500"
+                >
                   No results.
                 </td>
               </tr>
             )}
             {items.map((item) => (
               <tr key={item.id} className="border-b border-gray-100">
+                {mergeItems && (
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                      aria-label={`Select ${item.name}`}
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3" dir="auto">
                   {editingId === item.id ? (
                     <input
@@ -242,8 +327,67 @@ export function EntityManageTable({
       </div>
 
       <p className="mt-3 text-xs text-gray-500">
+        {mergeItems
+          ? "Select two or more entries to merge duplicates into one. All linked books are reassigned."
+          : null}
+        {mergeItems ? " " : ""}
         Delete is only allowed when no books are linked to this entry.
       </p>
+
+      {mergeOpen && mergeItems && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Merge {entityLabel}s
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Choose which name to keep. All books from the other selected{" "}
+              {entityLabel}s will be reassigned, then the duplicates are removed.
+            </p>
+            <fieldset className="mt-4 space-y-2">
+              {selectedItems.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50"
+                >
+                  <input
+                    type="radio"
+                    name="merge-target"
+                    checked={mergeTargetId === item.id}
+                    onChange={() => setMergeTargetId(item.id)}
+                  />
+                  <span dir="auto">
+                    {item.name}{" "}
+                    <span className="text-gray-500">({item.bookCount} books)</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMergeOpen(false)}
+                disabled={mergeMutation.isPending}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!mergeTargetId || mergeMutation.isPending}
+                onClick={() => mergeMutation.mutate()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+              >
+                {mergeMutation.isPending ? "Merging…" : "Merge"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import type {
   BulkFetchCoversInput,
   CreateBookInput,
   MissingCoversQuery,
+  MoveToLibraryInput,
   UpdateBookInput,
 } from "../validators/book.js";
 import * as goodreadsService from "./goodreadsService.js";
@@ -268,7 +269,7 @@ async function resolvePublisherId(
 
 function bookDataFromInput(
   input: CreateBookInput | UpdateBookInput,
-  authorId: string,
+  authorId: string | null,
   publisherId: string | null,
 ): Prisma.BookUncheckedCreateInput | Prisma.BookUncheckedUpdateInput {
   const coverImageUrl =
@@ -374,7 +375,10 @@ export async function getBookById(
 }
 
 export async function createBook(input: CreateBookInput) {
-  const authorId = await resolvePrimaryAuthorId(input.authorId, input.authorName);
+  const authorId =
+    input.toPurchase && !input.authorId && !input.authorName?.trim()
+      ? null
+      : await resolvePrimaryAuthorId(input.authorId, input.authorName);
   const publisherId = await resolvePublisherId(
     input.publisherId,
     input.publisherName,
@@ -423,7 +427,9 @@ export async function updateBook(id: string, input: UpdateBookInput) {
 
   const authorId =
     input.authorId !== undefined || input.authorName !== undefined
-      ? await resolvePrimaryAuthorId(input.authorId, input.authorName)
+      ? input.authorId || input.authorName?.trim()
+        ? await resolvePrimaryAuthorId(input.authorId, input.authorName)
+        : null
       : existing.authorId;
 
   const publisherId =
@@ -469,6 +475,49 @@ export async function updateBook(id: string, input: UpdateBookInput) {
   const book = await prisma.book.update({
     where: { id },
     data,
+    include: bookInclude,
+  });
+
+  return serializeBook(book, {
+    includePricing: true,
+    includeAdminFields: true,
+  });
+}
+
+export async function moveBookToLibrary(id: string, input: MoveToLibraryInput) {
+  const existing = await prisma.book.findUnique({ where: { id } });
+  if (!existing) {
+    throw new AppError(404, "NOT_FOUND", "Book not found");
+  }
+  if (!existing.toPurchase) {
+    throw new AppError(
+      400,
+      "VALIDATION_ERROR",
+      "Book is already in your library",
+    );
+  }
+
+  const authorId = await resolvePrimaryAuthorId(input.authorId, input.authorName);
+  const publisherId = await resolvePublisherId(
+    input.publisherId,
+    input.publisherName,
+  );
+
+  if (!publisherId) {
+    throw new AppError(400, "VALIDATION_ERROR", "Publisher is required");
+  }
+
+  const book = await prisma.book.update({
+    where: { id },
+    data: {
+      toPurchase: false,
+      isPubliclyVisible: true,
+      authorId,
+      publisherId,
+      numberOfPages: input.numberOfPages,
+      marketPrice: input.marketPrice,
+      purchasePrice: input.purchasePrice ?? null,
+    },
     include: bookInclude,
   });
 

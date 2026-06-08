@@ -437,7 +437,7 @@ export function MissingCoversPage() {
                       {book.title}
                     </td>
                     <td className="px-4 py-3 text-gray-600" dir="auto">
-                      {book.author.name}
+                      {book.author?.name ?? "—"}
                     </td>
                     <td className="px-4 py-3">
                       {book.externalId ? (

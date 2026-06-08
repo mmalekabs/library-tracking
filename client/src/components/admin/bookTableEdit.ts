@@ -53,7 +53,7 @@ export function getBookFieldDisplay(book: Book, field: BookTableField): string {
     case "title":
       return book.title;
     case "author":
-      return book.author.name;
+      return book.author?.name ?? "";
     case "publisher":
       return book.publisher?.name ?? "";
     case "status":

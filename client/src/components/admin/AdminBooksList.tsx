@@ -14,8 +14,8 @@ import {
   fetchAdminBooks,
   toggleBookVisibility,
   deleteBook,
-  moveBookToLibrary,
 } from "@/lib/books";
+import { MoveToLibraryModal } from "@/components/admin/MoveToLibraryModal";
 import { ApiError } from "@/lib/api";
 import type { Book } from "@/types";
 
@@ -62,6 +62,7 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [visibility, setVisibility] = useState<"all" | "public" | "hidden">("all");
+  const [moveToLibraryBook, setMoveToLibraryBook] = useState<Book | null>(null);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -101,16 +102,6 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books"] });
       toast.success("Visibility updated");
-    },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : "Update failed"),
-  });
-
-  const moveToLibraryMutation = useMutation({
-    mutationFn: moveBookToLibrary,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["books"] });
-      toast.success("Moved to your library");
     },
     onError: (err) =>
       toast.error(err instanceof ApiError ? err.message : "Update failed"),
@@ -228,7 +219,7 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           onDelete={handleDelete}
           onMoveToLibrary={
             collection === "to_purchase"
-              ? (id) => moveToLibraryMutation.mutate(id)
+              ? (book) => setMoveToLibraryBook(book)
               : undefined
           }
         />
@@ -270,7 +261,7 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
                 {collection === "to_purchase" && (
                   <button
                     type="button"
-                    onClick={() => moveToLibraryMutation.mutate(book.id)}
+                    onClick={() => setMoveToLibraryBook(book)}
                     className="inline-flex flex-1 items-center justify-center gap-1 rounded border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/5"
                   >
                     Add to library
@@ -298,6 +289,15 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           onPageSizeChange={handlePageSizeChange}
         />
       )}
+
+      <MoveToLibraryModal
+        book={moveToLibraryBook}
+        open={moveToLibraryBook !== null}
+        onClose={() => setMoveToLibraryBook(null)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["books"] });
+        }}
+      />
     </div>
   );
 }

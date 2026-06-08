@@ -36,7 +36,7 @@ interface AdminBooksTableProps {
   collection: "library" | "to_purchase";
   editPath: (id: string) => string;
   onDelete: (book: Book) => void;
-  onMoveToLibrary?: (id: string) => void;
+  onMoveToLibrary?: (book: Book) => void;
 }
 
 export function AdminBooksTable({
@@ -275,7 +275,7 @@ export function AdminBooksTable({
                     {collection === "to_purchase" && onMoveToLibrary && (
                       <button
                         type="button"
-                        onClick={() => onMoveToLibrary(book.id)}
+                        onClick={() => onMoveToLibrary(book)}
                         className="rounded p-1 text-primary hover:bg-primary/10"
                         title="Add to library"
                       >

@@ -53,7 +53,7 @@ export interface Book {
   toPurchase?: boolean;
   coverImageUrl: string | null;
   notes?: string | null;
-  author: Author;
+  author: Author | null;
   additionalAuthors?: Author[];
   publisher: Publisher | null;
   bookshelves?: Bookshelf[];

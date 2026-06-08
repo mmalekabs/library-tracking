@@ -75,7 +75,9 @@ function bookToFormState(book: Book): FormState {
     binding: book.binding,
     numberOfPages: book.numberOfPages?.toString() ?? "",
     externalId: book.externalId ?? "",
-    author: { id: book.author.id, name: book.author.name },
+    author: book.author
+      ? { id: book.author.id, name: book.author.name }
+      : { id: "", name: "" },
     additionalAuthors: (book.additionalAuthors ?? []).map((a) => ({
       id: a.id,
       name: a.name,
@@ -174,7 +176,7 @@ function formToPayload(form: FormState): Record<string, unknown> {
 
   if (form.author.id) {
     payload.authorId = form.author.id;
-  } else {
+  } else if (form.author.name.trim()) {
     payload.authorName = form.author.name.trim();
   }
 
@@ -275,8 +277,8 @@ export function BookForm({
 
   const handleSubmit = (e: React.FormEvent, addAnother = false) => {
     e.preventDefault();
-    if (!form.author.name.trim()) {
-      toast.error("Primary author is required");
+    if (!form.toPurchase && !form.author.name.trim()) {
+      toast.error("Primary author is required for library books");
       return;
     }
     saveMutation.mutate(addAnother);
@@ -370,12 +372,18 @@ export function BookForm({
         <div className="sm:col-span-2">
           <EntityPicker
             label="Primary author"
-            required
+            required={!form.toPurchase}
             value={form.author}
             onChange={(author) => set("author", author)}
             queryKey="admin-authors"
             fetchFn={fetchAdminAuthors}
           />
+          {form.toPurchase && (
+            <p className="mt-1 text-xs text-gray-500">
+              Optional on the wishlist. You will be asked for author (and other
+              details) when you add this book to your library.
+            </p>
+          )}
         </div>
         <div className="sm:col-span-2">
           <TagPicker

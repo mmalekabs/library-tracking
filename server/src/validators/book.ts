@@ -116,9 +116,35 @@ const bookFieldsSchema = z.object({
 });
 
 export const createBookSchema = bookFieldsSchema.refine(
-  (data) => !!(data.authorId || data.authorName?.trim()),
-  { message: "Primary author is required (authorId or authorName)", path: ["authorId"] },
+  (data) =>
+    data.toPurchase || !!(data.authorId || data.authorName?.trim()),
+  {
+    message: "Primary author is required for library books (authorId or authorName)",
+    path: ["authorId"],
+  },
 );
+
+export const moveToLibrarySchema = z
+  .object({
+    numberOfPages: z.coerce.number().int().min(1),
+    authorId: z.string().optional(),
+    authorName: z.string().optional(),
+    publisherId: z.string().optional().nullable(),
+    publisherName: z.string().optional().nullable(),
+    marketPrice: z.coerce.number().min(0),
+    purchasePrice: optionalDecimal,
+  })
+  .refine((data) => !!(data.authorId || data.authorName?.trim()), {
+    message: "Author is required (authorId or authorName)",
+    path: ["authorId"],
+  })
+  .refine(
+    (data) => !!(data.publisherId || data.publisherName?.trim()),
+    {
+      message: "Publisher is required (publisherId or publisherName)",
+      path: ["publisherId"],
+    },
+  );
 
 export const updateBookSchema = bookFieldsSchema
   .partial()
@@ -177,3 +203,4 @@ export type BulkFetchCoversInput = z.infer<typeof bulkFetchCoversSchema>;
 
 export type CreateBookInput = z.infer<typeof createBookSchema>;
 export type UpdateBookInput = z.infer<typeof updateBookSchema>;
+export type MoveToLibraryInput = z.infer<typeof moveToLibrarySchema>;

@@ -4,18 +4,21 @@ import {
   createAuthor,
   updateAuthor,
   deleteAuthor,
+  mergeAuthors,
 } from "@/lib/entities";
 
 export function AuthorsPage() {
   return (
     <EntityManageTable
       title="Authors"
-      description="Manage authors. Names are shared across all books."
+      entityLabel="author"
+      description="Manage authors. Merge duplicates to combine books under one name."
       queryKey="admin-authors-manage"
       fetchList={fetchAuthors}
       createItem={createAuthor}
       updateItem={updateAuthor}
       deleteItem={deleteAuthor}
+      mergeItems={mergeAuthors}
     />
   );
 }

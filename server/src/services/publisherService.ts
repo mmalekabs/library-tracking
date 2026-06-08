@@ -98,3 +98,64 @@ export async function deletePublisher(id: string) {
 
   await prisma.publisher.delete({ where: { id } });
 }
+
+export async function mergePublishers(targetId: string, sourceIds: string[]) {
+  const uniqueSources = [...new Set(sourceIds)].filter((id) => id !== targetId);
+  if (uniqueSources.length === 0) {
+    throw new AppError(
+      400,
+      "VALIDATION_ERROR",
+      "At least one source publisher is required (other than the target)",
+    );
+  }
+
+  const target = await prisma.publisher.findUnique({ where: { id: targetId } });
+  if (!target) {
+    throw new AppError(404, "NOT_FOUND", "Target publisher not found");
+  }
+
+  const sources = await prisma.publisher.findMany({
+    where: { id: { in: uniqueSources } },
+    select: { id: true, name: true },
+  });
+
+  if (sources.length !== uniqueSources.length) {
+    throw new AppError(404, "NOT_FOUND", "One or more source publishers not found");
+  }
+
+  let booksUpdated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const sourceId of uniqueSources) {
+      const result = await tx.book.updateMany({
+        where: { publisherId: sourceId },
+        data: { publisherId: targetId },
+      });
+      booksUpdated += result.count;
+    }
+
+    await tx.publisher.deleteMany({ where: { id: { in: uniqueSources } } });
+  });
+
+  const targetAfter = await prisma.publisher.findUnique({
+    where: { id: targetId },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: { select: { books: true } },
+    },
+  });
+
+  return {
+    target: {
+      id: targetAfter!.id,
+      name: targetAfter!.name,
+      createdAt: targetAfter!.createdAt.toISOString(),
+      bookCount: targetAfter!._count.books,
+    },
+    mergedCount: uniqueSources.length,
+    booksUpdated,
+    mergedNames: sources.map((s) => s.name),
+  };
+}

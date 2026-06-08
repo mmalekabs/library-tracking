@@ -4,18 +4,21 @@ import {
   createPublisher,
   updatePublisher,
   deletePublisher,
+  mergePublishers,
 } from "@/lib/entities";
 
 export function PublishersPage() {
   return (
     <EntityManageTable
       title="Publishers"
-      description="Manage publishers. Delete is blocked while books still reference a publisher."
+      entityLabel="publisher"
+      description="Manage publishers. Merge duplicates to combine books under one name."
       queryKey="admin-publishers-manage"
       fetchList={fetchPublishers}
       createItem={createPublisher}
       updateItem={updatePublisher}
       deleteItem={deletePublisher}
+      mergeItems={mergePublishers}
     />
   );
 }

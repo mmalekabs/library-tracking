@@ -188,7 +188,7 @@ export async function getSpending() {
     .map((b) => ({
       id: b.id,
       title: b.title,
-      author: b.author.name,
+      author: b.author?.name ?? "—",
       purchasePrice: decimalToNumber(b.purchasePrice),
       currency: b.currency,
     }))

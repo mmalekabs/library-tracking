@@ -90,11 +90,21 @@ export function fetchToPurchaseBooks(params?: Omit<BookListParams, "collection">
   });
 }
 
-/** Mark a wishlist book as owned (moves to library) */
-export function moveBookToLibrary(id: string) {
-  return apiFetch<Book>(`/admin/books/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({ toPurchase: false, isPubliclyVisible: true }),
+export interface MoveToLibraryInput {
+  numberOfPages: number;
+  authorId?: string;
+  authorName?: string;
+  publisherId?: string;
+  publisherName?: string;
+  marketPrice: number;
+  purchasePrice?: number | null;
+}
+
+/** Mark a wishlist book as owned with required library metadata */
+export function moveBookToLibrary(id: string, data: MoveToLibraryInput) {
+  return apiFetch<Book>(`/admin/books/${id}/move-to-library`, {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 }
 

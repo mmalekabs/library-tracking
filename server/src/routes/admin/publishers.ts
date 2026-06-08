@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { sendSuccess } from "../../utils/response.js";
 import * as publisherService from "../../services/publisherService.js";
-import { entityNameSchema } from "../../validators/entity.js";
+import { entityNameSchema, mergeEntitiesSchema } from "../../validators/entity.js";
 import { validateBody } from "../../validators/validate.js";
 import { paramId } from "../../utils/params.js";
 
@@ -44,6 +44,16 @@ router.delete(
   asyncHandler(async (req, res) => {
     await publisherService.deletePublisher(paramId(req.params.id));
     sendSuccess(res, { message: "Publisher deleted successfully" });
+  }),
+);
+
+router.post(
+  "/merge",
+  validateBody(mergeEntitiesSchema),
+  asyncHandler(async (req, res) => {
+    const { targetId, sourceIds } = req.body;
+    const result = await publisherService.mergePublishers(targetId, sourceIds);
+    sendSuccess(res, result);
   }),
 );
 

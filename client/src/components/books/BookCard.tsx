@@ -35,7 +35,9 @@ export function BookCard({ book, admin = false, detailPath }: BookCardProps) {
             <p className="line-clamp-3 text-sm font-semibold text-gray-700">
               {book.title}
             </p>
-            <p className="mt-1 text-xs text-gray-500">{book.author.name}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {book.author?.name ?? "—"}
+            </p>
           </div>
         )}
       </div>
@@ -61,7 +63,7 @@ export function BookCard({ book, admin = false, detailPath }: BookCardProps) {
         </h3>
 
         <p className="mt-1 text-sm text-gray-600" dir="auto">
-          {book.author.name}
+          {book.author?.name ?? "—"}
         </p>
 
         <div className="mt-auto pt-3 text-xs text-gray-500">

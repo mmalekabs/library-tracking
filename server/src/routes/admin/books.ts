@@ -13,6 +13,7 @@ import {
   visibilitySchema,
   type BookListQuery,
   missingCoversSummaryQuerySchema,
+  moveToLibrarySchema,
   type MissingCoversQuery,
   type MissingCoversSummaryQuery,
 } from "../../validators/book.js";
@@ -93,6 +94,18 @@ router.post(
   asyncHandler(async (req, res) => {
     const report = await bookService.bulkFetchGoodreadsCovers(req.body);
     sendSuccess(res, report);
+  }),
+);
+
+router.post(
+  "/:id/move-to-library",
+  validateBody(moveToLibrarySchema),
+  asyncHandler(async (req, res) => {
+    const book = await bookService.moveBookToLibrary(
+      paramId(req.params.id),
+      req.body,
+    );
+    sendSuccess(res, book);
   }),
 );
 

@@ -97,8 +97,8 @@ model Book {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  authorId String
-  author   Author @relation("PrimaryAuthor", fields: [authorId], references: [id])
+  authorId String?
+  author   Author? @relation("PrimaryAuthor", fields: [authorId], references: [id])
 
   additionalAuthors BookAdditionalAuthor[]
   publisherId       String?
