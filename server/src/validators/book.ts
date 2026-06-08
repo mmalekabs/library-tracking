@@ -65,10 +65,19 @@ export const bookListQuerySchema = z.object({
   sortBy: z
     .enum([
       "title",
+      "author",
+      "publisher",
+      "status",
+      "format",
+      "binding",
       "purchasePrice",
+      "marketPrice",
+      "currency",
       "numberOfPages",
-      "dateAdded",
       "yearPublished",
+      "isbn",
+      "isPubliclyVisible",
+      "dateAdded",
     ])
     .default("dateAdded"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),

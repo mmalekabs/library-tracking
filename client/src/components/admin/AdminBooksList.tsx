@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Plus, Search, LayoutGrid, Table2 } from "lucide-react";
+import { Columns3, Plus, Search, LayoutGrid, Table2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { BookCard } from "@/components/books/BookCard";
 import { AdminBooksTable } from "@/components/admin/AdminBooksTable";
@@ -14,8 +14,15 @@ import {
   fetchAdminBooks,
   toggleBookVisibility,
   deleteBook,
+  type BookSortBy,
 } from "@/lib/books";
 import { MoveToLibraryModal } from "@/components/admin/MoveToLibraryModal";
+import { BookTableColumnsModal } from "@/components/admin/BookTableColumnsModal";
+import {
+  getBookTableColumnsForOrder,
+  loadBookTableColumnOrder,
+  saveBookTableColumnOrder,
+} from "@/components/admin/bookTableColumns";
 import { ApiError } from "@/lib/api";
 import type { Book } from "@/types";
 
@@ -63,6 +70,15 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [visibility, setVisibility] = useState<"all" | "public" | "hidden">("all");
   const [moveToLibraryBook, setMoveToLibraryBook] = useState<Book | null>(null);
+  const [sortBy, setSortBy] = useState<BookSortBy>("dateAdded");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [columnOrder, setColumnOrder] = useState(loadBookTableColumnOrder);
+  const [columnsModalOpen, setColumnsModalOpen] = useState(false);
+
+  const tableColumns = useMemo(
+    () => getBookTableColumnsForOrder(columnOrder),
+    [columnOrder],
+  );
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -83,6 +99,8 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
       pageSize,
       debouncedSearch,
       visibility,
+      sortBy,
+      sortOrder,
     ],
     queryFn: () =>
       fetchAdminBooks({
@@ -91,10 +109,20 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
         search: debouncedSearch || undefined,
         visibility,
         collection,
-        sortBy: "dateAdded",
-        sortOrder: "desc",
+        sortBy,
+        sortOrder,
       }),
   });
+
+  const handleSort = (field: BookSortBy) => {
+    setPage(1);
+    if (sortBy === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortOrder(field === "title" || field === "author" ? "asc" : "desc");
+    }
+  };
 
   const visibilityMutation = useMutation({
     mutationFn: ({ id, visible }: { id: string; visible: boolean }) =>
@@ -173,6 +201,16 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           <option value="public">Public only</option>
           <option value="hidden">Hidden only</option>
         </select>
+        {viewMode === "table" && (
+          <button
+            type="button"
+            onClick={() => setColumnsModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Columns3 className="h-4 w-4" aria-hidden />
+            Columns
+          </button>
+        )}
         <div
           className="flex rounded-lg border border-gray-300 p-0.5"
           role="group"
@@ -214,7 +252,11 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
       {!isLoading && books.length > 0 && viewMode === "table" && (
         <AdminBooksTable
           books={books}
+          columns={tableColumns}
           collection={collection}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
           editPath={cfg.editPath}
           onDelete={handleDelete}
           onMoveToLibrary={
@@ -289,6 +331,18 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           onPageSizeChange={handlePageSizeChange}
         />
       )}
+
+      <BookTableColumnsModal
+        open={columnsModalOpen}
+        columnOrder={columnOrder}
+        onClose={() => setColumnsModalOpen(false)}
+        onSave={(order) => {
+          setColumnOrder(order);
+          saveBookTableColumnOrder(order);
+          setColumnsModalOpen(false);
+          toast.success("Column order updated");
+        }}
+      />
 
       <MoveToLibraryModal
         book={moveToLibraryBook}

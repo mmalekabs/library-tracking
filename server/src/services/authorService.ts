@@ -1,32 +1,49 @@
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../middleware/errorHandler.js";
+import type { EntityListQuery } from "../validators/entity.js";
+import {
+  collectionToPurchase,
+  sortEntities,
+} from "./entityListUtils.js";
 
-export async function listAuthorsAdmin(search?: string) {
+export async function listAuthorsAdmin(query: EntityListQuery) {
+  const toPurchase = collectionToPurchase(query.collection);
   const authors = await prisma.author.findMany({
-    where: search?.trim()
-      ? { name: { contains: search.trim(), mode: "insensitive" } }
+    where: query.search?.trim()
+      ? { name: { contains: query.search.trim(), mode: "insensitive" } }
       : undefined,
     select: {
       id: true,
       name: true,
       createdAt: true,
-      _count: {
-        select: {
-          booksAsPrimary: true,
-          booksAsAdditional: true,
-        },
+      booksAsPrimary: {
+        where: { toPurchase },
+        select: { id: true },
+      },
+      booksAsAdditional: {
+        where: { book: { toPurchase } },
+        select: { bookId: true },
       },
     },
-    orderBy: { name: "asc" },
   });
 
-  return authors.map((a) => ({
-    id: a.id,
-    name: a.name,
-    createdAt: a.createdAt.toISOString(),
-    bookCount: a._count.booksAsPrimary + a._count.booksAsAdditional,
-    primaryBookCount: a._count.booksAsPrimary,
-  }));
+  const mapped = authors
+    .map((a) => {
+      const bookIds = new Set([
+        ...a.booksAsPrimary.map((b) => b.id),
+        ...a.booksAsAdditional.map((aa) => aa.bookId),
+      ]);
+      return {
+        id: a.id,
+        name: a.name,
+        createdAt: a.createdAt.toISOString(),
+        bookCount: bookIds.size,
+        primaryBookCount: a.booksAsPrimary.length,
+      };
+    })
+    .filter((a) => a.bookCount > 0);
+
+  return sortEntities(mapped, query);
 }
 
 export async function createAuthor(name: string) {

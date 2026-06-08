@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { calculateSavings, decimalToNumber } from "../utils/book.js";
+import type { EntityBooksQuery } from "../validators/entity.js";
 import type {
   BookListQuery,
   BulkFetchCoversInput,
@@ -169,12 +170,30 @@ function buildOrderBy(
   switch (query.sortBy) {
     case "title":
       return { title: direction };
+    case "author":
+      return { author: { name: direction } };
+    case "publisher":
+      return { publisher: { name: direction } };
+    case "status":
+      return { status: direction };
+    case "format":
+      return { format: direction };
+    case "binding":
+      return { binding: direction };
     case "purchasePrice":
       return { purchasePrice: direction };
+    case "marketPrice":
+      return { marketPrice: direction };
+    case "currency":
+      return { currency: direction };
     case "numberOfPages":
       return { numberOfPages: direction };
     case "yearPublished":
       return { yearPublished: direction };
+    case "isbn":
+      return { isbn: direction };
+    case "isPubliclyVisible":
+      return { isPubliclyVisible: direction };
     case "dateAdded":
     default:
       return { dateAdded: direction };
@@ -339,6 +358,74 @@ export async function listBooks(
       totalPages: Math.ceil(totalItems / query.limit) || 1,
     },
   };
+}
+
+async function paginateAdminBooks(
+  where: Prisma.BookWhereInput,
+  query: EntityBooksQuery,
+) {
+  const skip = (query.page - 1) * query.limit;
+  const [books, totalItems] = await Promise.all([
+    prisma.book.findMany({
+      where,
+      skip,
+      take: query.limit,
+      orderBy: { title: "asc" },
+      include: bookInclude,
+    }),
+    prisma.book.count({ where }),
+  ]);
+
+  return {
+    books: books.map((b) =>
+      serializeBook(b, { includePricing: true, includeAdminFields: true }),
+    ),
+    pagination: {
+      page: query.page,
+      limit: query.limit,
+      totalItems,
+      totalPages: Math.ceil(totalItems / query.limit) || 1,
+    },
+  };
+}
+
+export async function listBooksByAuthor(authorId: string, query: EntityBooksQuery) {
+  const author = await prisma.author.findUnique({
+    where: { id: authorId },
+    select: { id: true },
+  });
+  if (!author) {
+    throw new AppError(404, "NOT_FOUND", "Author not found");
+  }
+
+  const where: Prisma.BookWhereInput = {
+    OR: [{ authorId }, { additionalAuthors: { some: { authorId } } }],
+  };
+  if (query.collection) {
+    where.toPurchase = query.collection === "to_purchase";
+  }
+
+  return paginateAdminBooks(where, query);
+}
+
+export async function listBooksByPublisher(
+  publisherId: string,
+  query: EntityBooksQuery,
+) {
+  const publisher = await prisma.publisher.findUnique({
+    where: { id: publisherId },
+    select: { id: true },
+  });
+  if (!publisher) {
+    throw new AppError(404, "NOT_FOUND", "Publisher not found");
+  }
+
+  const where: Prisma.BookWhereInput = { publisherId };
+  if (query.collection) {
+    where.toPurchase = query.collection === "to_purchase";
+  }
+
+  return paginateAdminBooks(where, query);
 }
 
 export async function getBookById(

@@ -12,7 +12,8 @@ export function PublishersPage() {
     <EntityManageTable
       title="Publishers"
       entityLabel="publisher"
-      description="Manage publishers. Merge duplicates to combine books under one name."
+      entityType="publisher"
+      description="Manage publishers by collection. Merge duplicates to combine books under one name."
       queryKey="admin-publishers-manage"
       fetchList={fetchPublishers}
       createItem={createPublisher}

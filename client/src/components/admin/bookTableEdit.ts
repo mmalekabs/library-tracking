@@ -1,3 +1,4 @@
+import type { BookSortBy } from "@/lib/books";
 import type { Book, BindingType, BookFormat, ReadingStatus } from "@/types";
 import {
   BINDING_OPTIONS,
@@ -23,11 +24,7 @@ export type BookTableField =
   | "currency"
   | "isPubliclyVisible";
 
-export const BOOK_TABLE_COLUMNS: {
-  key: BookTableField;
-  label: string;
-  minWidth?: string;
-}[] = [
+export const BOOK_TABLE_COLUMNS = [
   { key: "title", label: "Title", minWidth: "12rem" },
   { key: "author", label: "Author", minWidth: "9rem" },
   { key: "publisher", label: "Publisher", minWidth: "8rem" },
@@ -41,7 +38,30 @@ export const BOOK_TABLE_COLUMNS: {
   { key: "yearPublished", label: "Year", minWidth: "4rem" },
   { key: "isbn", label: "ISBN", minWidth: "7rem" },
   { key: "isPubliclyVisible", label: "Public", minWidth: "4rem" },
-];
+] as const satisfies readonly {
+  key: BookTableField;
+  label: string;
+  minWidth?: string;
+}[];
+
+export type BookTableColumnField = (typeof BOOK_TABLE_COLUMNS)[number]["key"];
+
+/** Maps visible table column to API `sortBy`. */
+export const BOOK_TABLE_SORT_BY: Record<BookTableColumnField, BookSortBy> = {
+  title: "title",
+  author: "author",
+  publisher: "publisher",
+  status: "status",
+  format: "format",
+  binding: "binding",
+  purchasePrice: "purchasePrice",
+  marketPrice: "marketPrice",
+  currency: "currency",
+  numberOfPages: "numberOfPages",
+  yearPublished: "yearPublished",
+  isbn: "isbn",
+  isPubliclyVisible: "isPubliclyVisible",
+};
 
 export const BOOK_TABLE_FIELD_LABELS: Record<BookTableField, string> =
   Object.fromEntries(

@@ -14,5 +14,20 @@ export const mergeEntitiesSchema = z
     path: ["sourceIds"],
   });
 
+export const entityBooksQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  collection: z.enum(["library", "to_purchase"]).optional(),
+});
+
+export const entityListQuerySchema = z.object({
+  search: z.string().optional(),
+  collection: z.enum(["library", "to_purchase"]).default("library"),
+  sortBy: z.enum(["name", "bookCount"]).default("name"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc"),
+});
+
 export type EntityNameInput = z.infer<typeof entityNameSchema>;
 export type MergeEntitiesInput = z.infer<typeof mergeEntitiesSchema>;
+export type EntityBooksQuery = z.infer<typeof entityBooksQuerySchema>;
+export type EntityListQuery = z.infer<typeof entityListQuerySchema>;

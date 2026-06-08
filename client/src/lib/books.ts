@@ -9,6 +9,22 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
+export type BookSortBy =
+  | "title"
+  | "author"
+  | "publisher"
+  | "status"
+  | "format"
+  | "binding"
+  | "purchasePrice"
+  | "marketPrice"
+  | "currency"
+  | "numberOfPages"
+  | "yearPublished"
+  | "isbn"
+  | "isPubliclyVisible"
+  | "dateAdded";
+
 export interface BookListParams {
   page?: number;
   limit?: number;
@@ -19,7 +35,7 @@ export interface BookListParams {
   authorId?: string;
   publisherId?: string;
   bookshelfId?: string;
-  sortBy?: string;
+  sortBy?: BookSortBy;
   sortOrder?: "asc" | "desc";
   visibility?: "all" | "public" | "hidden";
   collection?: "library" | "to_purchase";

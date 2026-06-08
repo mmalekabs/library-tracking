@@ -1,17 +1,36 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitMerge, Pencil, Plus, Search, Trash2, X, Check } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  GitMerge,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+  Check,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { ApiError } from "@/lib/api";
-import type { ManagedEntity } from "@/lib/entities";
+import type {
+  EntityCollection,
+  EntityListParams,
+  EntitySortBy,
+  EntitySortOrder,
+  ManagedEntity,
+} from "@/lib/entities";
+import { EntityBooksModal } from "./EntityBooksModal";
 import { inputClass } from "./FormSection";
 
 interface EntityManageTableProps {
   title: string;
   description: string;
   entityLabel: string;
+  entityType: "author" | "publisher";
   queryKey: string;
-  fetchList: (search: string) => Promise<ManagedEntity[]>;
+  fetchList: (params: EntityListParams) => Promise<ManagedEntity[]>;
   createItem: (name: string) => Promise<ManagedEntity>;
   updateItem: (id: string, name: string) => Promise<ManagedEntity>;
   deleteItem: (id: string) => Promise<{ message: string }>;
@@ -21,10 +40,48 @@ interface EntityManageTableProps {
   ) => Promise<{ mergedNames: string[] }>;
 }
 
+function SortableHeader({
+  label,
+  active,
+  sortOrder,
+  onClick,
+  align = "left",
+}: {
+  label: string;
+  active: boolean;
+  sortOrder: EntitySortOrder;
+  onClick: () => void;
+  align?: "left" | "right";
+}) {
+  const Icon = active
+    ? sortOrder === "asc"
+      ? ArrowUp
+      : ArrowDown
+    : ArrowUpDown;
+
+  return (
+    <th
+      className={`px-4 py-3 font-medium ${align === "right" ? "text-right" : "text-left"}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 hover:text-gray-900 ${
+          active ? "text-primary" : ""
+        } ${align === "right" ? "ml-auto" : ""}`}
+      >
+        {label}
+        <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+      </button>
+    </th>
+  );
+}
+
 export function EntityManageTable({
   title,
   description,
   entityLabel,
+  entityType,
   queryKey,
   fetchList,
   createItem,
@@ -33,6 +90,9 @@ export function EntityManageTable({
   mergeItems,
 }: EntityManageTableProps) {
   const queryClient = useQueryClient();
+  const [collection, setCollection] = useState<EntityCollection>("library");
+  const [sortBy, setSortBy] = useState<EntitySortBy>("name");
+  const [sortOrder, setSortOrder] = useState<EntitySortOrder>("asc");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [newName, setNewName] = useState("");
@@ -41,6 +101,7 @@ export function EntityManageTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState("");
+  const [booksEntity, setBooksEntity] = useState<ManagedEntity | null>(null);
 
   const handleSearch = (value: string) => {
     setSearch(value);
@@ -51,9 +112,16 @@ export function EntityManageTable({
     );
   };
 
+  const listParams: EntityListParams = {
+    search: debouncedSearch || undefined,
+    collection,
+    sortBy,
+    sortOrder,
+  };
+
   const { data: items = [], isLoading } = useQuery({
-    queryKey: [queryKey, debouncedSearch],
-    queryFn: () => fetchList(debouncedSearch),
+    queryKey: [queryKey, collection, debouncedSearch, sortBy, sortOrder],
+    queryFn: () => fetchList(listParams),
   });
 
   const invalidate = () => {
@@ -114,6 +182,21 @@ export function EntityManageTable({
       toast.error(err instanceof ApiError ? err.message : "Merge failed"),
   });
 
+  const toggleSort = (column: EntitySortBy) => {
+    if (sortBy === column) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortOrder(column === "name" ? "asc" : "desc");
+    }
+  };
+
+  const switchCollection = (next: EntityCollection) => {
+    setCollection(next);
+    setSelectedIds(new Set());
+    setEditingId(null);
+  };
+
   const startEdit = (item: ManagedEntity) => {
     setEditingId(item.id);
     setEditName(item.name);
@@ -138,61 +221,102 @@ export function EntityManageTable({
     setMergeOpen(true);
   };
 
+  const openBooks = (item: ManagedEntity) => {
+    if (item.bookCount === 0) return;
+    setBooksEntity(item);
+  };
+
+  const collectionLabel =
+    collection === "library" ? "My library" : "To purchase";
+
   return (
     <div>
       <div className="sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200/80 bg-gray-100 px-4 pb-4 md:top-16 md:-mx-8 md:px-8">
         <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
         <p className="mt-1 text-sm text-gray-600">{description}</p>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-        <div className="relative min-w-[200px] flex-1 max-w-md">
-          <Search
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-            aria-hidden
-          />
-          <input
-            type="search"
-            placeholder="Search by name…"
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            className={`${inputClass} pl-9`}
-          />
-        </div>
-        <form
-          className="flex flex-1 gap-2 max-w-md"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (newName.trim()) createMutation.mutate();
-          }}
+        <div
+          className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white p-0.5"
+          role="tablist"
+          aria-label="Collection"
         >
-          <input
-            type="text"
-            placeholder="New name…"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            className={inputClass}
-            dir="auto"
-          />
-          <button
-            type="submit"
-            disabled={!newName.trim() || createMutation.isPending}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60"
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Add
-          </button>
-        </form>
-        {mergeItems && (
           <button
             type="button"
-            disabled={!canMerge}
-            onClick={openMerge}
-            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+            role="tab"
+            aria-selected={collection === "library"}
+            onClick={() => switchCollection("library")}
+            className={`rounded-md px-4 py-2 text-sm font-medium ${
+              collection === "library"
+                ? "bg-primary text-white"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
           >
-            <GitMerge className="h-4 w-4" aria-hidden />
-            Merge selected ({selectedIds.size})
+            My library
           </button>
-        )}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={collection === "to_purchase"}
+            onClick={() => switchCollection("to_purchase")}
+            className={`rounded-md px-4 py-2 text-sm font-medium ${
+              collection === "to_purchase"
+                ? "bg-primary text-white"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            To purchase
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <div className="relative min-w-[200px] flex-1 max-w-md">
+            <Search
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              placeholder="Search by name…"
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              className={`${inputClass} pl-9`}
+            />
+          </div>
+          <form
+            className="flex flex-1 gap-2 max-w-md"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (newName.trim()) createMutation.mutate();
+            }}
+          >
+            <input
+              type="text"
+              placeholder="New name…"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className={inputClass}
+              dir="auto"
+            />
+            <button
+              type="submit"
+              disabled={!newName.trim() || createMutation.isPending}
+              className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Add
+            </button>
+          </form>
+          {mergeItems && (
+            <button
+              type="button"
+              disabled={!canMerge}
+              onClick={openMerge}
+              className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              <GitMerge className="h-4 w-4" aria-hidden />
+              Merge selected ({selectedIds.size})
+            </button>
+          )}
         </div>
       </div>
 
@@ -205,9 +329,19 @@ export function EntityManageTable({
                   <span className="sr-only">Select</span>
                 </th>
               )}
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Books</th>
-              <th className="px-4 py-3 font-medium text-right">Actions</th>
+              <SortableHeader
+                label="Name"
+                active={sortBy === "name"}
+                sortOrder={sortOrder}
+                onClick={() => toggleSort("name")}
+              />
+              <SortableHeader
+                label="Books"
+                active={sortBy === "bookCount"}
+                sortOrder={sortOrder}
+                onClick={() => toggleSort("bookCount")}
+              />
+              <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -227,7 +361,7 @@ export function EntityManageTable({
                   colSpan={mergeItems ? 4 : 3}
                   className="px-4 py-8 text-center text-gray-500"
                 >
-                  No results.
+                  No {entityLabel}s with books in {collectionLabel.toLowerCase()}.
                 </td>
               </tr>
             )}
@@ -252,10 +386,35 @@ export function EntityManageTable({
                       autoFocus
                     />
                   ) : (
-                    <span className="font-medium text-gray-900">{item.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => openBooks(item)}
+                      disabled={item.bookCount === 0}
+                      className="text-left font-medium text-primary hover:underline disabled:cursor-default disabled:text-gray-900 disabled:no-underline"
+                      dir="auto"
+                      title={
+                        item.bookCount > 0
+                          ? `View ${item.bookCount} book(s)`
+                          : "No books"
+                      }
+                    >
+                      {item.name}
+                    </button>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{item.bookCount}</td>
+                <td className="px-4 py-3">
+                  {item.bookCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => openBooks(item)}
+                      className="text-primary hover:underline"
+                    >
+                      {item.bookCount}
+                    </button>
+                  ) : (
+                    <span className="text-gray-600">0</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
                     {editingId === item.id ? (
@@ -297,7 +456,7 @@ export function EntityManageTable({
                           onClick={() => {
                             if (item.bookCount > 0) {
                               toast.error(
-                                `Cannot delete: ${item.bookCount} book(s) still linked.`,
+                                `Cannot delete: ${item.bookCount} book(s) in ${collectionLabel.toLowerCase()} still linked.`,
                               );
                               return;
                             }
@@ -331,8 +490,18 @@ export function EntityManageTable({
           ? "Select two or more entries to merge duplicates into one. All linked books are reassigned."
           : null}
         {mergeItems ? " " : ""}
-        Delete is only allowed when no books are linked to this entry.
+        Showing {entityLabel}s with at least one book in{" "}
+        <span className="font-medium">{collectionLabel.toLowerCase()}</span>.
+        Click column headers to sort.
       </p>
+
+      <EntityBooksModal
+        entity={booksEntity}
+        entityType={entityType}
+        collection={collection}
+        open={booksEntity !== null}
+        onClose={() => setBooksEntity(null)}
+      />
 
       {mergeOpen && mergeItems && (
         <div

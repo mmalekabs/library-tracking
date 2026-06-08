@@ -1,26 +1,38 @@
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../middleware/errorHandler.js";
+import type { EntityListQuery } from "../validators/entity.js";
+import {
+  collectionToPurchase,
+  sortEntities,
+} from "./entityListUtils.js";
 
-export async function listPublishersAdmin(search?: string) {
+export async function listPublishersAdmin(query: EntityListQuery) {
+  const toPurchase = collectionToPurchase(query.collection);
   const publishers = await prisma.publisher.findMany({
-    where: search?.trim()
-      ? { name: { contains: search.trim(), mode: "insensitive" } }
+    where: query.search?.trim()
+      ? { name: { contains: query.search.trim(), mode: "insensitive" } }
       : undefined,
     select: {
       id: true,
       name: true,
       createdAt: true,
-      _count: { select: { books: true } },
+      books: {
+        where: { toPurchase },
+        select: { id: true },
+      },
     },
-    orderBy: { name: "asc" },
   });
 
-  return publishers.map((p) => ({
-    id: p.id,
-    name: p.name,
-    createdAt: p.createdAt.toISOString(),
-    bookCount: p._count.books,
-  }));
+  const mapped = publishers
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      createdAt: p.createdAt.toISOString(),
+      bookCount: p.books.length,
+    }))
+    .filter((p) => p.bookCount > 0);
+
+  return sortEntities(mapped, query);
 }
 
 export async function createPublisher(name: string) {

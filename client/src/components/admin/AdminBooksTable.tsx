@@ -7,9 +7,11 @@ import type { Book } from "@/types";
 import { updateBook } from "@/lib/books";
 import { ApiError } from "@/lib/api";
 import { ConfirmChangeModal } from "./ConfirmChangeModal";
+import type { BookSortBy } from "@/lib/books";
 import {
-  BOOK_TABLE_COLUMNS,
   BOOK_TABLE_FIELD_LABELS,
+  BOOK_TABLE_SORT_BY,
+  type BookTableColumnField,
   type BookTableField,
   buildBookFieldPayload,
   fieldUsesSelect,
@@ -20,6 +22,7 @@ import {
   valuesEqual,
 } from "./bookTableEdit";
 import { inputClass } from "./FormSection";
+import { SortableTableHeader } from "./SortableTableHeader";
 
 interface PendingChange {
   book: Book;
@@ -31,9 +34,19 @@ interface PendingChange {
   payload: Record<string, unknown>;
 }
 
+type BookTableColumn = {
+  key: BookTableColumnField;
+  label: string;
+  minWidth?: string;
+};
+
 interface AdminBooksTableProps {
   books: Book[];
+  columns: BookTableColumn[];
   collection: "library" | "to_purchase";
+  sortBy: BookSortBy;
+  sortOrder: "asc" | "desc";
+  onSort: (field: BookSortBy) => void;
   editPath: (id: string) => string;
   onDelete: (book: Book) => void;
   onMoveToLibrary?: (book: Book) => void;
@@ -41,7 +54,11 @@ interface AdminBooksTableProps {
 
 export function AdminBooksTable({
   books,
+  columns,
   collection,
+  sortBy,
+  sortOrder,
+  onSort,
   editPath,
   onDelete,
   onMoveToLibrary,
@@ -233,15 +250,20 @@ export function AdminBooksTable({
         <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {BOOK_TABLE_COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  className="whitespace-nowrap px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500"
-                  style={{ minWidth: col.minWidth }}
-                >
-                  {col.label}
-                </th>
-              ))}
+              {columns.map((col) => {
+                const sortField = BOOK_TABLE_SORT_BY[col.key];
+                return (
+                  <SortableTableHeader
+                    key={col.key}
+                    label={col.label}
+                    active={sortBy === sortField}
+                    sortOrder={sortOrder}
+                    onClick={() => onSort(sortField)}
+                    className="whitespace-nowrap px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    style={col.minWidth ? { minWidth: col.minWidth } : undefined}
+                  />
+                );
+              })}
               <th className="sticky right-0 bg-gray-50 px-3 py-3 text-xs font-semibold uppercase text-gray-500">
                 Actions
               </th>
@@ -255,7 +277,7 @@ export function AdminBooksTable({
                   !book.isPubliclyVisible ? "bg-amber-50/40" : undefined
                 }
               >
-                {BOOK_TABLE_COLUMNS.map((col) => (
+                {columns.map((col) => (
                   <td
                     key={col.key}
                     className="max-w-[14rem] px-2 py-1.5 align-middle"
@@ -299,8 +321,8 @@ export function AdminBooksTable({
       </div>
 
       <p className="mt-2 text-xs text-gray-500">
-        Click any cell to edit. Click outside the table to review changes before
-        saving.
+        Use Columns to reorder fields. Click headers to sort. Click any cell to
+        edit. Click outside the table to review changes before saving.
       </p>
 
       <ConfirmChangeModal
