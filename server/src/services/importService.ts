@@ -91,6 +91,7 @@ function rowToBookInput(
     dateFinishedReading: null,
     status: settings.defaultStatus as ReadingStatus,
     isPubliclyVisible: settings.defaultVisibility,
+    isGift: false,
     toPurchase: settings.defaultToPurchase,
     bookshelfNames: splitCommaList(bookshelfRaw),
     bookshelfIds: [],

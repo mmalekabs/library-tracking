@@ -77,6 +77,7 @@ export const bookListQuerySchema = z.object({
       "yearPublished",
       "isbn",
       "isPubliclyVisible",
+      "isGift",
       "dateAdded",
     ])
     .default("dateAdded"),
@@ -107,6 +108,7 @@ const bookFieldsSchema = z.object({
   dateStartedReading: optionalDate,
   dateFinishedReading: optionalDate,
   isPubliclyVisible: z.boolean().default(true),
+  isGift: z.boolean().default(false),
   toPurchase: z.boolean().default(false),
   coverImageUrl: z
     .string()

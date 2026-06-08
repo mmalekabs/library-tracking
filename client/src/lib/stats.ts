@@ -44,6 +44,7 @@ export interface OverviewStats {
   totalBooks: number;
   totalPages: number;
   totalSpent: number;
+  totalValue: number;
   totalSavings: number | null;
   averagePrice: number | null;
   medianPrice: number | null;
@@ -57,6 +58,8 @@ export interface OverviewStats {
   byFormat: Record<string, number>;
   avgPagesPerBook: number | null;
   avgSpentPerBook: number | null;
+  avgValuePerBook: number | null;
+  booksWithMarketPrice: number;
 }
 
 export interface ReadingStats {
