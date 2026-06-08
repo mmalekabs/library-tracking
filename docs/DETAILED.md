@@ -27,6 +27,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 19. [Cookbook: common future edits](#19-cookbook-common-future-edits)
 20. [Known limitations and recommended improvements](#20-known-limitations-and-recommended-improvements)
 21. [Goodreads covers and Missing covers page](#21-goodreads-covers-and-missing-covers-page)
+22. [Author/publisher merge and add-to-library flow](#22-authorpublisher-merge-and-add-to-library-flow)
 
 ---
 
@@ -106,7 +107,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/components/layout/AdminLayout.tsx` | Admin sidebar + mobile drawer |
 | `src/components/auth/ProtectedRoute.tsx` | Redirect if not logged in |
 | `src/components/books/BookCard.tsx` | Catalog card |
-| `src/components/admin/*` | Forms, tables, import UI pieces |
+| `src/components/admin/*` | Forms, tables, import UI, `MoveToLibraryModal.tsx` |
 | `src/pages/public/*` | Catalog + wishlist pages |
 | `src/pages/admin/*` | All admin screens (incl. `MissingCoversPage.tsx`) |
 | `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, …) |
@@ -201,7 +202,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `isPubliclyVisible` | boolean | Default `true` |
 | `toPurchase` | boolean | Default `false` — wishlist flag |
 | `coverImageUrl`, `notes` | string? | `notes` admin-only in API |
-| `authorId` | FK → Author | Primary author |
+| `authorId` | FK? → Author | Primary author; **nullable** for wishlist books (`toPurchase: true`) |
 | `publisherId` | FK? → Publisher | |
 
 **Indexes:** `title`, `status`, `format`, `isPubliclyVisible`, `toPurchase`, `authorId`, `publisherId`
@@ -217,6 +218,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 |-----------|------|
 | `20250524120000_init` | Full initial schema |
 | `20250525120000_add_to_purchase` | `Book.toPurchase` + index |
+| `20250526120000_optional_author` | `Book.authorId` nullable (wishlist without author) |
 
 **Apply locally:** `cd server && npx prisma migrate deploy`  
 **Apply on Railway:** `preDeployCommand` in `server/railway.toml`
@@ -280,9 +282,21 @@ Public detail: book must be `isPubliclyVisible` **and** match collection (`toPur
 
 - If `toPurchase: true` on create → sets `toPurchase` and respects `isPubliclyVisible` from input (no longer forced hidden)
 
-### Move to library (client)
+### Wishlist author (optional)
 
-- `moveBookToLibrary(id)` → `PUT` with `{ toPurchase: false, isPubliclyVisible: true }`
+- `createBookSchema`: primary author required **unless** `toPurchase: true`
+- `Book.authorId` may be `null` on wishlist rows; API returns `author: null` (UI shows “—”)
+- Library books must have an author (enforced on create and via add-to-library flow)
+
+### Move to library
+
+**UI:** `MoveToLibraryModal` on **To Purchase** grid/table → **Add to library**
+
+**Client:** `moveBookToLibrary(id, data)` → `POST /api/admin/books/:id/move-to-library`
+
+**Body** (`moveToLibrarySchema`): `numberOfPages`, `authorId` or `authorName`, `publisherId` or `publisherName`, `marketPrice` (required), `purchasePrice` (optional)
+
+**Server:** `bookService.moveBookToLibrary` — verifies `toPurchase`, resolves author/publisher, sets `toPurchase: false`, `isPubliclyVisible: true`, saves pricing/pages
 
 ### Serialization (`serializeBook`)
 
@@ -349,6 +363,7 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | GET | `/missing-covers/summary` | `?collection=all\|library\|to_purchase` — counts without cover |
 | GET | `/missing-covers` | Paginated list of books missing `coverImageUrl` |
 | POST | `/bulk-fetch-covers` | Server-side bulk fetch (optional; UI uses client-side loop) |
+| POST | `/:id/move-to-library` | Wishlist → library with required metadata (`moveToLibrarySchema`) |
 
 **List query highlights** (`bookListQuerySchema`):
 
@@ -369,6 +384,7 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | POST | `/api/admin/authors` — `{ name }` |
 | PUT | `/api/admin/authors/:id` — `{ name }` |
 | DELETE | `/api/admin/authors/:id` — blocked if books reference author |
+| POST | `/api/admin/authors/merge` — `{ targetId, sourceIds[] }` reassign books, delete sources |
 
 | Method | Path |
 |--------|------|
@@ -376,6 +392,7 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | POST | `/api/admin/publishers` |
 | PUT | `/api/admin/publishers/:id` |
 | DELETE | `/api/admin/publishers/:id` |
+| POST | `/api/admin/publishers/merge` — `{ targetId, sourceIds[] }` |
 
 ### Admin lookup (forms)
 
@@ -455,7 +472,19 @@ HTTP Request
 | `getMissingCoversSummary` | Counts books without cover, with/without valid Goodreads Id |
 | `listBooksMissingCovers` | Paginated missing-cover list; optional `withGoodreadsIdOnly` filter |
 | `bulkFetchGoodreadsCovers` | Server loop with ~800ms delay (used by API; admin UI may fetch client-side) |
+| `moveBookToLibrary` | Wishlist → library with validated metadata |
 | `listPublicAuthors` etc. | Filter lists for public catalog |
+
+### `authorService.ts` / `publisherService.ts`
+
+| Function | Responsibility |
+|----------|----------------|
+| `listAuthorsAdmin` / `listPublishersAdmin` | Admin CRUD lists with `bookCount` |
+| `createAuthor` / `createPublisher` | Unique name |
+| `updateAuthor` / `updatePublisher` | Rename |
+| `deleteAuthor` / `deletePublisher` | Blocked if books linked |
+| `mergeAuthors` | Reassign primary + additional author links to target; remove duplicate additional rows; delete sources |
+| `mergePublishers` | Reassign `publisherId` on all books; delete sources |
 
 ### Author/publisher resolution on create/update
 
@@ -560,8 +589,8 @@ HTTP Request
 - Orchestrates search, visibility filter, view toggle (table/grid), pagination
 - `collection` prop: `"library"` | `"to_purchase"`
 - Uses `fetchAdminBooks` with `limit` from `pageSize` (10–100)
-- Grid: cards + visibility / delete / move-to-library
-- Table: delegates to `AdminBooksTable`
+- Grid: cards + visibility / delete / **Add to library** (opens `MoveToLibraryModal`)
+- Table: delegates to `AdminBooksTable`; same modal for add-to-library
 
 **Change default page size:** `DEFAULT_PAGE_SIZE` in `constants/pagination.ts`.
 
@@ -573,7 +602,7 @@ HTTP Request
 - One active cell edit at a time
 - `pointerdown` on `document` outside `tableRef` → finish edit → open `ConfirmChangeModal` if changed
 - Save via `updateBook(id, payload)`
-- Actions: link to full form, move to library, delete
+- Actions: link to full form, add to library (callback → modal), delete
 
 **Add editable column:**
 
@@ -601,6 +630,7 @@ HTTP Request
 - `defaultToPurchase`, `backPath` props
 - `formToPayload` builds API body (author by id or name, etc.)
 - Checkbox: **To purchase** + **Publicly visible** (label depends on `toPurchase`)
+- **Primary author** optional when **To purchase** is checked; required for library books
 - **Goodreads Book Id** (`externalId`) + **Fetch cover** button → `GET /api/admin/goodreads/cover/:id` → sets `coverImageUrl`
 - Mutations: `createBook`, `updateBook`, `deleteBook`
 
@@ -625,6 +655,15 @@ HTTP Request
 #### `EntityManageTable.tsx`
 
 - Full CRUD table for authors or publishers (inline row edit, not book table)
+- Row checkboxes + **Merge selected (N)** when `mergeItems` prop provided (`mergeAuthors` / `mergePublishers`)
+- Merge modal: radio pick target name; sources deleted after book reassignment
+- **Sticky** header block (title, description, search, add, merge) — `sticky top-14 md:top-16` below admin layout header
+
+#### `MoveToLibraryModal.tsx`
+
+- Shown from To Purchase **Add to library**
+- Fields: pages, author (`EntityPicker`), publisher (`EntityPicker`), market price, optional purchase price
+- Submits `POST .../move-to-library`
 
 ### Admin — stats
 
@@ -684,9 +723,9 @@ HTTP Request
 |--------|---------|---------------|
 | `api.ts` | `apiFetch`, `ApiError`, `checkHealth` | Generic |
 | `auth.ts` | `login`, `getMe`, `changePassword`, token helpers | `/auth/*` |
-| `books.ts` | List, CRUD, visibility, `moveBookToLibrary`, missing covers, `hasGoodreadsBookId` | `/books`, `/to-purchase`, `/admin/books` |
+| `books.ts` | List, CRUD, visibility, `moveBookToLibrary(id, data)`, missing covers, `hasGoodreadsBookId` | `/books`, `/to-purchase`, `/admin/books` |
 | `goodreads.ts` | `fetchGoodreadsCover(bookId)` | `/admin/goodreads/cover/:bookId` |
-| `entities.ts` | Author/publisher CRUD | `/admin/authors`, `/admin/publishers` |
+| `entities.ts` | Author/publisher CRUD + `mergeAuthors` / `mergePublishers` | `/admin/authors`, `/admin/publishers` |
 | `lookup.ts` | `fetchAdminAuthors`, etc. | `/admin/lookup/*` |
 | `stats.ts` | One function per stat endpoint | `/admin/stats/*` |
 | `import.ts` | `executeCsvImport`, types | `/admin/import/csv` |
@@ -858,8 +897,10 @@ CLIENT_URL=https://<your-frontend-domain>
 
 - Root: `client`
 - Build: `npm install && npm run build` (see `client/railway.toml`)
-- Nixpacks serves `dist/` with **Caddy** (do not set `vite preview` as start command)
-- Variable: `VITE_API_URL=https://<backend>/api` (must include `https://` and `/api` path)
+- Start: `npm run start` → `serve -s dist` (serves production build; **not** dev `index.html`)
+- Do not use `vite`, `npm run dev`, or `vite preview` as the Railway start command
+- Variable: `VITE_API_URL=https://<backend>/api` (must include `https://` and `/api` path; set before build)
+- **Verify deploy:** View Page Source — script should be `/assets/index-*.js`, not `/src/main.tsx`
 
 ### Root `railway.toml`
 
@@ -1018,6 +1059,55 @@ Query params for list: `page`, `limit`, `search`, `collection`, `withGoodreadsId
 
 ---
 
+## 22. Author/publisher merge and add-to-library flow
+
+### Merge authors or publishers
+
+**UI:** `/admin/authors` or `/admin/publishers` → check two or more rows → **Merge selected** → choose name to keep → **Merge**
+
+**API:** `POST /api/admin/authors/merge` or `POST /api/admin/publishers/merge`
+
+```json
+{ "targetId": "cuid-to-keep", "sourceIds": ["cuid-a", "cuid-b"] }
+```
+
+**Authors:** updates `Book.authorId` and `BookAdditionalAuthor` rows; drops duplicate additional-author links when target is already on the book; deletes source author rows.
+
+**Publishers:** updates `Book.publisherId`; deletes source publisher rows.
+
+**Validation:** `mergeEntitiesSchema` in `validators/entity.ts` — `targetId` must not appear in `sourceIds`.
+
+### Optional author on wishlist
+
+| Context | Author rule |
+|---------|-------------|
+| Create/edit wishlist book (`toPurchase: true`) | Author optional (`authorId` may be null) |
+| Create library book | Author required (`authorId` or `authorName`) |
+| Add to library modal | Author required |
+| Public catalog cards | Shows “—” when `author` is null |
+
+### Add to library modal flow
+
+```
+To Purchase list → Add to library
+  → MoveToLibraryModal (prefills existing pages/prices/author/publisher if any)
+  → POST /api/admin/books/:id/move-to-library
+  → bookService.moveBookToLibrary
+  → Book in library with full metadata
+```
+
+### Files to touch
+
+| Change | Files |
+|--------|-------|
+| Merge logic | `authorService.ts`, `publisherService.ts`, `validators/entity.ts`, admin author/publisher routes |
+| Merge UI | `EntityManageTable.tsx`, `AuthorsPage.tsx`, `PublishersPage.tsx`, `lib/entities.ts` |
+| Move to library | `moveToLibrarySchema`, `bookService.moveBookToLibrary`, `routes/admin/books.ts`, `MoveToLibraryModal.tsx`, `AdminBooksList.tsx` |
+| Optional wishlist author | `schema.prisma`, migration `optional_author`, `createBookSchema`, `BookForm.tsx`, `types/index.ts` (`author: Author \| null`) |
+| Sticky entity toolbar | `EntityManageTable.tsx` sticky wrapper classes |
+
+---
+
 ## Appendix A — Client route → file map
 
 | Route | Component file |
@@ -1067,6 +1157,9 @@ Query params for list: `page`, `limit`, `search`, `collection`, `withGoodreadsId
 | GET | `/api/admin/books/missing-covers/summary` | `routes/admin/books.ts` |
 | GET | `/api/admin/books/missing-covers` | `routes/admin/books.ts` |
 | POST | `/api/admin/books/bulk-fetch-covers` | `routes/admin/books.ts` |
+| POST | `/api/admin/books/:id/move-to-library` | `routes/admin/books.ts` |
+| POST | `/api/admin/authors/merge` | `routes/admin/authors.ts` |
+| POST | `/api/admin/publishers/merge` | `routes/admin/publishers.ts` |
 
 ---
 
@@ -1129,6 +1222,13 @@ Use this when onboarding or auditing completeness.
 - `bookService.ts` missing-cover helpers, `MissingCoversPage.tsx`
 - `BookForm.tsx` Fetch cover, `lib/goodreads.ts`
 - `AdminBooksList.tsx` default **grid** view
+
+**Phase 12 — Merge entities + add to library**
+
+- Migration `optional_author`, nullable `Book.authorId`
+- `mergeAuthors`, `mergePublishers`, `moveBookToLibrary` services + routes
+- `MoveToLibraryModal.tsx`, `EntityManageTable` merge + sticky toolbar
+- `BookForm.tsx` optional author on wishlist
 
 ---
 

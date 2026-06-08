@@ -59,7 +59,9 @@ Every book row has a boolean **`toPurchase`**:
 | **Library** (owned / reading list) | `false` | `/admin/books` | `/` (catalog) |
 | **To purchase** (wishlist) | `true` | `/admin/to-purchase` | `/to-purchase` |
 
-A book is in **one** collection at a time. **Add to library** on a wishlist item sets `toPurchase: false` and moves it to Books.
+A book is in **one** collection at a time. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then moves the book to your library.
+
+Wishlist books may be saved **without an author**; author is required when adding to the library or when saving a library book.
 
 ### Public visibility
 
@@ -99,17 +101,27 @@ Login at `/admin/login`. After login:
 | **Dashboard** | Charts and KPIs (reading, spending, formats, etc.) |
 | **Books** | Library collection — grid or **table** with inline edit |
 | **To Purchase** | Wishlist — same UI patterns as Books |
-| **Authors** | Create/rename/delete authors |
-| **Publishers** | Create/rename/delete publishers |
+| **Authors** | Create/rename/delete authors; **merge** duplicates; sticky search/toolbar while scrolling |
+| **Publishers** | Same as authors (including merge) |
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
 | **Missing covers** | List books without cover images; bulk or single fetch from Goodreads |
 | **Settings** | Change admin password |
 
 **Books / To Purchase UI:**
 
-- **Grid view** (default): cards with visibility / delete / add-to-library actions
+- **Grid view** (default): cards with visibility / delete / **Add to library** (wishlist only)
 - **Table view**: click a cell to edit; click outside the table → confirmation modal if changed
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
+
+**Add to library (To Purchase):**
+
+- Opens a modal: **pages**, **author**, **publisher**, and **market / actual price** (required); **purchase price** (optional)
+- Saves metadata and sets `toPurchase: false`, `isPubliclyVisible: true`
+
+**Authors / Publishers:**
+
+- Select two or more rows → **Merge selected** → pick which name to keep; all linked books are reassigned
+- Title, search, add, and merge controls stay **sticky** below the admin header while you scroll the list
 
 **Covers from Goodreads:**
 
@@ -148,7 +160,9 @@ Typical setup: **three services**
 
 1. **PostgreSQL** plugin  
 2. **Backend** — root directory `server`, uses `server/railway.toml` (migrate on pre-deploy, start Node)  
-3. **Frontend** — root directory `client`, static build  
+3. **Frontend** — root directory `client`; `npm run build` then `npm run start` (`serve -s dist`) via `client/railway.toml`  
+
+Production must serve **`dist/`** (built `/assets/index-*.js`), not dev `index.html` with `/src/main.tsx`.
 
 Secrets live in **Railway Variables**, not in git. See [SECURITY.md](../SECURITY.md).
 
@@ -171,6 +185,7 @@ The project was built incrementally:
 | 9 | Admin table view + inline edit + pagination |
 | 10 | GitHub-ready secrets handling (`SECURITY.md`, `.gitignore`) |
 | 11 | Goodreads cover fetch (form + Missing covers page with live progress) |
+| 12 | Merge authors/publishers; optional wishlist author; add-to-library modal; sticky entity toolbar |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 
