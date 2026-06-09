@@ -114,7 +114,7 @@ export function AdminBooksTable({
         newRaw: normalizedNew,
         oldDisplay: getBookFieldDisplay(book, field),
         newDisplay:
-          field === "isPubliclyVisible"
+          field === "isPubliclyVisible" || field === "isGift"
             ? normalizedNew === "true"
               ? "Yes"
               : "No"

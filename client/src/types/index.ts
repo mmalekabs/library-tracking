@@ -50,6 +50,7 @@ export interface Book {
   dateStartedReading: string | null;
   dateFinishedReading: string | null;
   isPubliclyVisible?: boolean;
+  isGift?: boolean;
   toPurchase?: boolean;
   coverImageUrl: string | null;
   notes?: string | null;

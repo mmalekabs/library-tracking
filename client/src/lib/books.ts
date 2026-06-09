@@ -23,6 +23,7 @@ export type BookSortBy =
   | "yearPublished"
   | "isbn"
   | "isPubliclyVisible"
+  | "isGift"
   | "dateAdded";
 
 export interface BookListParams {

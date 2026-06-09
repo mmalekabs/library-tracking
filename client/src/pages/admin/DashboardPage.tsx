@@ -30,6 +30,7 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
+  TrendingUp,
 } from "lucide-react";
 import {
   fetchStatsOverview,
@@ -147,6 +148,16 @@ export function DashboardPage() {
                 : undefined
             }
             icon={Wallet}
+          />
+          <StatCard
+            label="Total value"
+            value={`${overview.totalValue.toLocaleString()} SAR`}
+            sub={
+              overview.avgValuePerBook
+                ? `avg ${overview.avgValuePerBook} SAR/book (${overview.booksWithMarketPrice} priced)`
+                : "Sum of market prices"
+            }
+            icon={TrendingUp}
           />
           <StatCard
             label="Total savings"

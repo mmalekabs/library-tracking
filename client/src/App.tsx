@@ -17,6 +17,7 @@ import { PublishersPage } from "@/pages/admin/PublishersPage";
 import { ToPurchasePage } from "@/pages/admin/ToPurchasePage";
 import { MissingCoversPage } from "@/pages/admin/MissingCoversPage";
 import { ReadingPage } from "@/pages/admin/ReadingPage";
+import { FromGoodreadsPage } from "@/pages/admin/FromGoodreadsPage";
 
 export default function App() {
   return (
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="authors" element={<AuthorsPage />} />
         <Route path="publishers" element={<PublishersPage />} />
         <Route path="import" element={<ImportPage />} />
+        <Route path="from-goodreads" element={<FromGoodreadsPage />} />
         <Route path="missing-covers" element={<MissingCoversPage />} />
         <Route path="reading" element={<ReadingPage />} />
         <Route path="settings" element={<SettingsPage />} />

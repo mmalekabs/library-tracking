@@ -53,6 +53,7 @@ interface FormState {
   dateFinishedReading: string;
   bookshelves: { id: string; name: string }[];
   isPubliclyVisible: boolean;
+  isGift: boolean;
   toPurchase: boolean;
   coverImageUrl: string;
   notes: string;
@@ -101,6 +102,7 @@ function bookToFormState(book: Book): FormState {
       name: s.name,
     })),
     isPubliclyVisible: book.isPubliclyVisible ?? true,
+    isGift: book.isGift ?? false,
     toPurchase: book.toPurchase ?? false,
     coverImageUrl: book.coverImageUrl ?? "",
     notes: book.notes ?? "",
@@ -130,6 +132,7 @@ const emptyForm = (toPurchase = false): FormState => ({
   dateFinishedReading: "",
   bookshelves: [],
   isPubliclyVisible: true,
+  isGift: false,
   toPurchase,
   coverImageUrl: "",
   notes: "",
@@ -161,6 +164,7 @@ function formToPayload(form: FormState): Record<string, unknown> {
       ? new Date(form.dateFinishedReading).toISOString()
       : null,
     isPubliclyVisible: form.isPubliclyVisible,
+    isGift: form.isGift,
     toPurchase: form.toPurchase,
     coverImageUrl: form.coverImageUrl.trim() || null,
     notes: form.notes.trim() || null,
@@ -474,6 +478,18 @@ export function BookForm({
             ))}
           </select>
         </FormField>
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <input
+            id="isGift"
+            type="checkbox"
+            checked={form.isGift}
+            onChange={(e) => set("isGift", e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+          <label htmlFor="isGift" className="text-sm font-medium text-gray-700">
+            Gift?
+          </label>
+        </div>
         <div>
           <span className="mb-1 block text-sm font-medium text-gray-700">
             Savings (purchase − market)

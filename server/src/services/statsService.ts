@@ -54,7 +54,12 @@ export async function getOverview() {
     .map((b) => decimalToNumber(b.purchasePrice))
     .filter((p): p is number => p !== null);
 
+  const marketPrices = books
+    .map((b) => decimalToNumber(b.marketPrice))
+    .filter((p): p is number => p !== null);
+
   const totalSpent = prices.reduce((s, p) => s + p, 0);
+  const totalValue = marketPrices.reduce((s, p) => s + p, 0);
   const averagePrice = prices.length ? totalSpent / prices.length : null;
   const medianPrice = median(prices);
 
@@ -97,6 +102,7 @@ export async function getOverview() {
     totalBooks,
     totalPages,
     totalSpent: Math.round(totalSpent * 100) / 100,
+    totalValue: Math.round(totalValue * 100) / 100,
     totalSavings: totalSavings !== null ? Math.round(totalSavings * 100) / 100 : null,
     averagePrice: averagePrice !== null ? Math.round(averagePrice * 100) / 100 : null,
     medianPrice: medianPrice !== null ? Math.round(medianPrice * 100) / 100 : null,
@@ -112,6 +118,11 @@ export async function getOverview() {
       totalBooks > 0 ? Math.round(totalPages / totalBooks) : null,
     avgSpentPerBook:
       prices.length > 0 ? Math.round((totalSpent / prices.length) * 100) / 100 : null,
+    avgValuePerBook:
+      marketPrices.length > 0
+        ? Math.round((totalValue / marketPrices.length) * 100) / 100
+        : null,
+    booksWithMarketPrice: marketPrices.length,
   };
 }
 

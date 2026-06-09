@@ -28,6 +28,11 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 20. [Known limitations and recommended improvements](#20-known-limitations-and-recommended-improvements)
 21. [Goodreads covers and Missing covers page](#21-goodreads-covers-and-missing-covers-page)
 22. [Author/publisher merge and add-to-library flow](#22-authorpublisher-merge-and-add-to-library-flow)
+23. [Books table sorting and column order](#23-books-table-sorting-and-column-order)
+24. [Authors/publishers tabs and book drill-down](#24-authorspublishers-tabs-and-book-drill-down)
+25. [Add from Goodreads](#25-add-from-goodreads)
+26. [Gift field and Total value KPI](#26-gift-field-and-total-value-kpi)
+27. [Reading tracker (`reading-tracking` branch)](#27-reading-tracker-reading-tracking-branch)
 
 ---
 
@@ -65,14 +70,19 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/routes/admin/lookup.ts` | Autocomplete for forms |
 | `src/routes/admin/import.ts` | CSV preview + import |
 | `src/routes/admin/stats.ts` | Dashboard stat endpoints |
-| `src/routes/admin/goodreads.ts` | Fetch cover URL from Goodreads book page |
-| `src/services/goodreadsService.ts` | Scrape `og:image` from Goodreads show page |
+| `src/routes/admin/goodreads.ts` | Goodreads cover + full book metadata fetch |
+| `src/services/goodreadsService.ts` | Scrape Goodreads show page (JSON-LD, meta tags, `data-testid` fields) |
+| `src/validators/goodreads.ts` | Query schema for book fetch (`input` = Id or URL) |
+| `src/services/entityListUtils.ts` | Shared entity list filters/sort (authors/publishers) |
 | `src/services/bookService.ts` | Core book logic, serialization, filters, missing covers |
 | `src/services/authorService.ts` | Author CRUD |
 | `src/services/publisherService.ts` | Publisher CRUD |
 | `src/services/lookupService.ts` | Lightweight lists for pickers |
 | `src/services/importService.ts` | CSV parsing + row import |
 | `src/services/statsService.ts` | Aggregations for dashboard |
+| `src/routes/admin/reading.ts` | Reading tracker API (**`reading-tracking` branch**) |
+| `src/services/readingService.ts` | Entries, sessions, reading stats (**`reading-tracking` branch**) |
+| `src/validators/reading.ts` | Zod schemas for reading tracker (**`reading-tracking` branch**) |
 | `src/validators/book.ts` | Zod schemas for books |
 | `src/validators/auth.ts` | Login / password schemas |
 | `src/validators/entity.ts` | Author/publisher name schema |
@@ -107,10 +117,11 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/components/layout/AdminLayout.tsx` | Admin sidebar + mobile drawer |
 | `src/components/auth/ProtectedRoute.tsx` | Redirect if not logged in |
 | `src/components/books/BookCard.tsx` | Catalog card |
-| `src/components/admin/*` | Forms, tables, import UI, `MoveToLibraryModal.tsx` |
+| `src/components/admin/*` | Forms, tables, `MoveToLibraryModal.tsx`, `SortableTableHeader.tsx`, `BookTableColumnsModal.tsx`, `EntityBooksModal.tsx` |
+| `src/components/admin/bookTableColumns.ts` | Column order persistence (`localStorage`) |
 | `src/pages/public/*` | Catalog + wishlist pages |
-| `src/pages/admin/*` | All admin screens (incl. `MissingCoversPage.tsx`) |
-| `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, …) |
+| `src/pages/admin/*` | Admin screens incl. `MissingCoversPage.tsx`, `FromGoodreadsPage.tsx` |
+| `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, `entities.ts`, …) |
 | `src/utils/formatElapsed.ts` | Timer display for bulk cover fetch |
 | `src/constants/*` | Enums labels, pagination, CSV fields |
 | `src/types/index.ts` | Shared TS interfaces |
@@ -200,6 +211,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `dateAdded` | DateTime | Default now |
 | `dateStartedReading`, `dateFinishedReading` | DateTime? | |
 | `isPubliclyVisible` | boolean | Default `true` |
+| `isGift` | boolean | Default `false` — received as a gift |
 | `toPurchase` | boolean | Default `false` — wishlist flag |
 | `coverImageUrl`, `notes` | string? | `notes` admin-only in API |
 | `authorId` | FK? → Author | Primary author; **nullable** for wishlist books (`toPurchase: true`) |
@@ -219,6 +231,8 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `20250524120000_init` | Full initial schema |
 | `20250525120000_add_to_purchase` | `Book.toPurchase` + index |
 | `20250526120000_optional_author` | `Book.authorId` nullable (wishlist without author) |
+| `20250528120000_book_is_gift` | `Book.isGift` boolean default `false` |
+| `20250527120000_reading_tracker` | `ReadingEntry`, `ReadingSession` — **`reading-tracking` branch only** |
 
 **Apply locally:** `cd server && npx prisma migrate deploy`  
 **Apply on Railway:** `preDeployCommand` in `server/railway.toml`
@@ -421,7 +435,7 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 
 | Path | Purpose |
 |------|---------|
-| `/overview` | Totals, public/hidden counts, read count, etc. |
+| `/overview` | Totals, public/hidden counts, read count, **totalValue** (sum of market prices), totalSpent, savings, etc. |
 | `/reading` | Status breakdown |
 | `/spending` | Price aggregates |
 | `/authors` | Top authors |
@@ -437,8 +451,26 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/cover/:bookId` | Numeric Goodreads Book Id → `{ coverUrl, goodreadsBookId, goodreadsUrl }` |
+| GET | `/book?input=` | Book Id **or** full show-page URL → full metadata preview (see §25) |
 
-**Implementation:** `goodreadsService.ts` fetches `https://www.goodreads.com/book/show/{id}`, parses Open Graph `og:image`. Validates ids with `isValidGoodreadsBookId` (digits only).
+**Implementation:** `goodreadsService.ts` fetches `https://www.goodreads.com/book/show/{id}`. Cover: Open Graph `og:image`. Full book: JSON-LD `Book` schema + `data-testid` fields (`pagesFormat`, `publicationInfo`) + meta tags. `parseGoodreadsBookId()` accepts digits-only Id or URL. Validates numeric ids with `isValidGoodreadsBookId`.
+
+### Admin reading (`/api/admin/reading`) — **`reading-tracking` branch only**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/summary` | Today/week/month totals, active read count |
+| GET | `/current` | Active `ReadingEntry` rows with progress |
+| GET | `/history` | Paginated finished/DNF entries |
+| GET | `/stats?period=day\|week\|month\|year` | Pages/minutes timeline + books finished in range |
+| GET | `/stats/books` | Time and pages aggregated per book (re-reads) |
+| GET | `/entries/:id` | One entry with all sessions |
+| POST | `/entries` | Start a read-through (`bookId`) |
+| PATCH | `/entries/:id` | Update status, rating, review, finish |
+| POST | `/entries/:id/sessions` | Log daily pages/minutes |
+| DELETE | `/sessions/:id` | Remove a session |
+
+**Models:** `ReadingEntry` (one read-through, supports re-reads), `ReadingSession` (daily log). Syncs `Book.status` and reading dates from latest entry. See §27.
 
 ---
 
@@ -523,7 +555,8 @@ HTTP Request
 
 **Admin app** — `ProtectedRoute` → `AdminLayout`:
 
-- Dashboard, books, to-purchase, authors, publishers, import, missing-covers, settings
+- Dashboard, books, to-purchase, authors, publishers, import, from-goodreads, missing-covers, settings
+- **`reading-tracking` branch:** also `/admin/reading`
 - Shared `BookFormPage` for `/admin/books/new`, `/admin/books/:id/edit`, `/admin/to-purchase/new`, `/admin/to-purchase/:id/edit`
 
 ### Path detection in `BookFormPage`
@@ -558,7 +591,7 @@ HTTP Request
 #### `AdminLayout.tsx`
 
 - Desktop sidebar + mobile hamburger drawer
-- `navItems` array drives menu (Dashboard, Books, To Purchase, Authors, Publishers, Import, Missing covers, Settings)
+- `navItems` array drives menu (Dashboard, Books, To Purchase, Authors, Publishers, Import, From Goodreads, Missing covers, Settings; **Reading** on `reading-tracking` branch)
 - `pageTitles` for header title; special cases for `/new` and `/edit` paths
 - Logout clears auth and redirects to login
 - “View public catalog” link to `/`
@@ -589,6 +622,8 @@ HTTP Request
 - Orchestrates search, visibility filter, view toggle (table/grid), pagination
 - `collection` prop: `"library"` | `"to_purchase"`
 - Uses `fetchAdminBooks` with `limit` from `pageSize` (10–100)
+- **Table sort:** `sortBy` / `sortOrder` state → `fetchAdminBooks` (server-side)
+- **Column order:** `bookTableColumns.ts` + `BookTableColumnsModal` (localStorage key `admin-book-table-column-order`)
 - Grid: cards + visibility / delete / **Add to library** (opens `MoveToLibraryModal`)
 - Table: delegates to `AdminBooksTable`; same modal for add-to-library
 
@@ -598,7 +633,8 @@ HTTP Request
 
 #### `AdminBooksTable.tsx`
 
-- Renders scrollable HTML table
+- Renders scrollable HTML table; column order from `columns` prop
+- **Sortable headers** via `SortableTableHeader` (↑ / ↓ / ↕)
 - One active cell edit at a time
 - `pointerdown` on `document` outside `tableRef` → finish edit → open `ConfirmChangeModal` if changed
 - Save via `updateBook(id, payload)`
@@ -613,6 +649,16 @@ HTTP Request
 #### `bookTableEdit.ts`
 
 - Pure helpers for table editing (no React)
+- `BOOK_TABLE_COLUMNS`, `BOOK_TABLE_SORT_BY` — maps columns to API `sortBy`
+- Includes **Gift?** (`isGift`) and **Public** columns among others
+
+#### `SortableTableHeader.tsx`
+
+- Reusable clickable `<th>` with sort direction icons
+
+#### `BookTableColumnsModal.tsx` + `bookTableColumns.ts`
+
+- Drag / up-down reorder; **Reset to default**; persists order in `localStorage`
 
 #### `TablePagination.tsx`
 
@@ -629,7 +675,7 @@ HTTP Request
 - Full create/edit form (all book fields)
 - `defaultToPurchase`, `backPath` props
 - `formToPayload` builds API body (author by id or name, etc.)
-- Checkbox: **To purchase** + **Publicly visible** (label depends on `toPurchase`)
+- Checkbox: **To purchase** + **Publicly visible** (label depends on `toPurchase`) + **Gift?** (`isGift`, Pricing section)
 - **Primary author** optional when **To purchase** is checked; required for library books
 - **Goodreads Book Id** (`externalId`) + **Fetch cover** button → `GET /api/admin/goodreads/cover/:id` → sets `coverImageUrl`
 - Mutations: `createBook`, `updateBook`, `deleteBook`
@@ -655,9 +701,16 @@ HTTP Request
 #### `EntityManageTable.tsx`
 
 - Full CRUD table for authors or publishers (inline row edit, not book table)
+- **Tabs:** My library / To purchase (`collection` query to API)
+- **Sortable** Name and Books headers (`sortBy` / `sortOrder`)
+- Click **name** or **book count** → `EntityBooksModal` (paginated books for that entity in current collection)
 - Row checkboxes + **Merge selected (N)** when `mergeItems` prop provided (`mergeAuthors` / `mergePublishers`)
 - Merge modal: radio pick target name; sources deleted after book reassignment
 - **Sticky** header block (title, description, search, add, merge) — `sticky top-14 md:top-16` below admin layout header
+
+#### `EntityBooksModal.tsx`
+
+- Lists books for one author/publisher; respects `collection` tab from parent table
 
 #### `MoveToLibraryModal.tsx`
 
@@ -705,7 +758,9 @@ HTTP Request
 | Authors | `AuthorsPage.tsx` | `EntityManageTable` + author API |
 | Publishers | `PublishersPage.tsx` | Same for publishers |
 | Import | `ImportPage.tsx` | 4-step wizard: upload → preview → settings → report |
+| From Goodreads | `FromGoodreadsPage.tsx` | Fetch metadata by Id/URL; preview; create book |
 | Missing covers | `MissingCoversPage.tsx` | Books without `coverImageUrl`; Goodreads bulk/single fetch |
+| Reading | `ReadingPage.tsx` | **`reading-tracking` branch** — sessions, history, stats |
 | Settings | `SettingsPage.tsx` | Change password |
 
 ### Import wizard steps (`ImportPage.tsx`)
@@ -724,8 +779,9 @@ HTTP Request
 | `api.ts` | `apiFetch`, `ApiError`, `checkHealth` | Generic |
 | `auth.ts` | `login`, `getMe`, `changePassword`, token helpers | `/auth/*` |
 | `books.ts` | List, CRUD, visibility, `moveBookToLibrary(id, data)`, missing covers, `hasGoodreadsBookId` | `/books`, `/to-purchase`, `/admin/books` |
-| `goodreads.ts` | `fetchGoodreadsCover(bookId)` | `/admin/goodreads/cover/:bookId` |
-| `entities.ts` | Author/publisher CRUD + `mergeAuthors` / `mergePublishers` | `/admin/authors`, `/admin/publishers` |
+| `goodreads.ts` | `fetchGoodreadsCover`, `fetchGoodreadsBook` | `/admin/goodreads/cover/:id`, `/admin/goodreads/book?input=` |
+| `entities.ts` | Author/publisher CRUD, merge, list with `collection`/`sortBy` | `/admin/authors`, `/admin/publishers` |
+| `reading.ts` | Reading tracker API wrappers | `/admin/reading/*` (**`reading-tracking` branch**) |
 | `lookup.ts` | `fetchAdminAuthors`, etc. | `/admin/lookup/*` |
 | `stats.ts` | One function per stat endpoint | `/admin/stats/*` |
 | `import.ts` | `executeCsvImport`, types | `/admin/import/csv` |
@@ -797,7 +853,9 @@ Mirrors API: `Book`, `Author`, `Publisher`, `Bookshelf`, enums.
 **Page:** `DashboardPage.tsx`  
 **Service:** `statsService.ts` (raw Prisma aggregates)
 
-Typical metrics: total books, pages sum, read counts, format/status pies, spending totals, timeline of `dateAdded`, bookshelf distribution.
+Typical metrics: total books, pages sum, read counts, format/status pies, **total spent**, **total value** (sum of `marketPrice`), savings, timeline of `dateAdded`, bookshelf distribution.
+
+**Overview KPI `totalValue`:** sum of all non-null `marketPrice` values; subtitle shows average per priced book and count (`booksWithMarketPrice`). Implemented in `statsService.getOverview()`.
 
 **Note:** Stats currently count **all** books in DB (including `toPurchase` and hidden) unless filtered in service — verify `statsService.ts` before trusting KPIs for “library only”.
 
@@ -1052,9 +1110,9 @@ Query params for list: `page`, `limit`, `search`, `collection`, `withGoodreadsId
 | Change | Files |
 |--------|-------|
 | Goodreads scrape logic | `server/src/services/goodreadsService.ts` |
-| Cover API route | `server/src/routes/admin/goodreads.ts` |
+| Cover + full book API | `server/src/routes/admin/goodreads.ts`, `validators/goodreads.ts` |
 | Missing covers data | `server/src/services/bookService.ts`, `validators/book.ts`, `routes/admin/books.ts` |
-| Admin UI | `MissingCoversPage.tsx`, `AdminLayout.tsx`, `App.tsx` |
+| Admin UI | `MissingCoversPage.tsx`, `FromGoodreadsPage.tsx`, `AdminLayout.tsx`, `App.tsx` |
 | Form button | `BookForm.tsx`, `lib/goodreads.ts` |
 
 ---
@@ -1108,6 +1166,174 @@ To Purchase list → Add to library
 
 ---
 
+## 23. Books table sorting and column order
+
+### Server-side sort
+
+- `AdminBooksList` holds `sortBy` / `sortOrder`; passed to `GET /api/admin/books`
+- `bookListQuerySchema.sortBy` includes: title, author, publisher, status, format, binding, purchasePrice, marketPrice, currency, numberOfPages, yearPublished, isbn, isPubliclyVisible, **isGift**, dateAdded
+- `bookService.buildOrderBy()` maps each field to Prisma `orderBy`
+
+### Client UI
+
+- `AdminBooksTable` renders `SortableTableHeader` per column
+- Click header: same column toggles asc/desc; new column resets default direction (title/author → asc, others → desc)
+
+### Column reorder
+
+- **Columns** button (table view only) opens `BookTableColumnsModal`
+- Order stored in `localStorage` key `admin-book-table-column-order`
+- `bookTableColumns.ts`: `loadBookTableColumnOrder`, `saveBookTableColumnOrder`, `getBookTableColumnsForOrder`
+- New columns appended automatically if schema adds fields later
+
+### Files
+
+| Change | Files |
+|--------|-------|
+| Sort API | `validators/book.ts`, `bookService.ts`, `lib/books.ts` (`BookSortBy`) |
+| Table UI | `AdminBooksList.tsx`, `AdminBooksTable.tsx`, `SortableTableHeader.tsx`, `bookTableEdit.ts` |
+| Column order | `BookTableColumnsModal.tsx`, `bookTableColumns.ts` |
+
+---
+
+## 24. Authors/publishers tabs and book drill-down
+
+### Collection tabs
+
+- `EntityManageTable` tabs: **My library** (`collection=library`) / **To purchase** (`collection=to_purchase`)
+- API query: `entityListQuerySchema` — `collection`, `sortBy` (`name` \| `bookCount`), `sortOrder`, `search`
+- Book counts and listed books filtered per collection (`entityListUtils.ts`, `authorService` / `publisherService`)
+
+### Book drill-down
+
+- Click entity **name** or **book count** → `EntityBooksModal`
+- `GET /api/admin/authors/:id/books` and `GET /api/admin/publishers/:id/books` with `collection`, pagination
+
+### Files
+
+| Change | Files |
+|--------|-------|
+| Server | `validators/entity.ts`, `entityListUtils.ts`, `authorService.ts`, `publisherService.ts`, admin routes |
+| Client | `EntityManageTable.tsx`, `EntityBooksModal.tsx`, `lib/entities.ts`, `AuthorsPage.tsx`, `PublishersPage.tsx` |
+
+---
+
+## 25. Add from Goodreads
+
+### Purpose
+
+Alternative to manual **Add book** and **Import CSV**: enter Goodreads **Book Id** or paste a show-page URL, fetch metadata, preview, then create the book.
+
+### API
+
+`GET /api/admin/goodreads/book?input={idOrUrl}`
+
+**Response fields (preview):** `title`, `authorName`, `additionalAuthorNames`, `coverImageUrl`, `isbn` / `isbn13`, `numberOfPages`, `yearPublished`, `publisherName`, `format`, `binding`, `description`, `goodreadsBookId`, `goodreadsUrl`, `existingBook` (if `externalId` already in DB)
+
+### Parsing strategy (`goodreadsService.fetchBookDataByBookId`)
+
+1. `parseGoodreadsBookId` — digits only or URL with `/book/show/{id}`
+2. Fetch HTML from `https://www.goodreads.com/book/show/{id}`
+3. Parse `<script type="application/ld+json">` Book schema (title, authors, ISBN, pages, image, format)
+4. Supplement: `data-testid="pagesFormat"`, `data-testid="publicationInfo"`, Open Graph meta
+5. Map `bookFormat` → `BindingType` + `BookFormat`
+
+### UI flow (`FromGoodreadsPage.tsx`)
+
+1. Enter Id/URL → **Fetch book**
+2. Preview card + link to Goodreads
+3. Optional **Add to purchase list** checkbox
+4. **Add to library** / **Add to purchase list** → `createBook` → redirect to edit form
+5. If `existingBook` set, show warning with link (no duplicate create)
+
+### Files
+
+| Change | Files |
+|--------|-------|
+| Scraper | `server/src/services/goodreadsService.ts` |
+| Route | `server/src/routes/admin/goodreads.ts`, `validators/goodreads.ts` |
+| Client | `FromGoodreadsPage.tsx`, `lib/goodreads.ts`, `App.tsx`, `AdminLayout.tsx` |
+
+---
+
+## 26. Gift field and Total value KPI
+
+### Gift (`isGift`)
+
+| Location | Behavior |
+|----------|----------|
+| `Book.isGift` | Boolean, default `false`; migration `20250528120000_book_is_gift` |
+| Book form | **Gift?** checkbox in Pricing section |
+| Admin table | **Gift?** column — Yes/No inline edit (like Public) |
+| API | `createBookSchema` / `updateBookSchema`; sortable via `sortBy=isGift` |
+
+### Total value (dashboard)
+
+- **`statsService.getOverview()`** — `totalValue` = sum of all `marketPrice` values; `avgValuePerBook`, `booksWithMarketPrice`
+- **`DashboardPage.tsx`** — **Total value** `StatCard` after **Total spent** (uses `TrendingUp` icon)
+- **`client/src/lib/stats.ts`** — `OverviewStats.totalValue`, `avgValuePerBook`, `booksWithMarketPrice`
+
+---
+
+## 27. Reading tracker (`reading-tracking` branch)
+
+> **Not on `main`.** Check out branch `reading-tracking` for this module. Run migration `20250527120000_reading_tracker` after switching.
+
+### Data model
+
+#### `ReadingEntry`
+
+One read-through of a book (supports **re-reads**).
+
+| Field | Notes |
+|-------|-------|
+| `bookId` | FK → Book |
+| `status` | READING, READ, DID_NOT_FINISH, ON_HOLD |
+| `startedAt`, `finishedAt` | |
+| `currentPage`, `rating`, `review` | |
+| `sessions` | One-to-many `ReadingSession` |
+
+#### `ReadingSession`
+
+Daily reading log.
+
+| Field | Notes |
+|-------|-------|
+| `sessionDate` | Date |
+| `pagesRead`, `minutesRead` | |
+| `endPage`, `note` | Optional |
+
+**Sync:** `readingService.syncBookFromEntries()` updates `Book.status`, `dateStartedReading`, `dateFinishedReading` from the active or latest finished entry.
+
+**Migration:** Existing library books with reading status were backfilled into `ReadingEntry` rows (`legacy-{bookId}` ids).
+
+### Admin UI (`ReadingPage.tsx`)
+
+Route: `/admin/reading`
+
+| Tab | Content |
+|-----|---------|
+| Reading now | Active entries, progress %, log session, pause, finish |
+| History | Paginated finished / DNF with ratings, pages, time |
+| Statistics | Daily / weekly / monthly / annual charts (pages + minutes) |
+| Time per book | Aggregated minutes, pages, calendar days, re-read count |
+
+**Modals:** `StartReadingModal`, `LogSessionModal`, `FinishReadingModal` (`components/reading/`)
+
+### Client library
+
+`lib/reading.ts` — `fetchReadingSummary`, `fetchCurrentlyReading`, `fetchReadingHistory`, `fetchReadingStats`, `fetchBookTimeStats`, `startReading`, `updateReadingEntry`, `logReadingSession`
+
+### Files (branch)
+
+| Area | Paths |
+|------|-------|
+| Schema | `prisma/schema.prisma`, `migrations/20250527120000_reading_tracker` |
+| Server | `services/readingService.ts`, `routes/admin/reading.ts`, `validators/reading.ts` |
+| Client | `pages/admin/ReadingPage.tsx`, `components/reading/*`, `lib/reading.ts` |
+
+---
+
 ## Appendix A — Client route → file map
 
 | Route | Component file |
@@ -1127,7 +1353,9 @@ To Purchase list → Add to library
 | `/admin/authors` | `pages/admin/AuthorsPage.tsx` |
 | `/admin/publishers` | `pages/admin/PublishersPage.tsx` |
 | `/admin/import` | `pages/admin/ImportPage.tsx` |
+| `/admin/from-goodreads` | `pages/admin/FromGoodreadsPage.tsx` |
 | `/admin/missing-covers` | `pages/admin/MissingCoversPage.tsx` |
+| `/admin/reading` | `pages/admin/ReadingPage.tsx` (**`reading-tracking` branch**) |
 | `/admin/settings` | `pages/admin/SettingsPage.tsx` |
 
 ---
@@ -1154,12 +1382,16 @@ To Purchase list → Add to library
 | * | `/api/admin/import/*` | `routes/admin/import.ts` |
 | * | `/api/admin/stats/*` | `routes/admin/stats.ts` |
 | GET | `/api/admin/goodreads/cover/:bookId` | `routes/admin/goodreads.ts` |
+| GET | `/api/admin/goodreads/book?input=` | `routes/admin/goodreads.ts` |
+| * | `/api/admin/reading/*` | `routes/admin/reading.ts` (**`reading-tracking` branch**) |
 | GET | `/api/admin/books/missing-covers/summary` | `routes/admin/books.ts` |
 | GET | `/api/admin/books/missing-covers` | `routes/admin/books.ts` |
 | POST | `/api/admin/books/bulk-fetch-covers` | `routes/admin/books.ts` |
 | POST | `/api/admin/books/:id/move-to-library` | `routes/admin/books.ts` |
 | POST | `/api/admin/authors/merge` | `routes/admin/authors.ts` |
+| GET | `/api/admin/authors/:id/books` | `routes/admin/authors.ts` |
 | POST | `/api/admin/publishers/merge` | `routes/admin/publishers.ts` |
+| GET | `/api/admin/publishers/:id/books` | `routes/admin/publishers.ts` |
 
 ---
 

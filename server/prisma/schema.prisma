@@ -90,6 +90,7 @@ model Book {
   dateFinishedReading DateTime?
 
   isPubliclyVisible Boolean @default(true)
+  isGift            Boolean @default(false)
   toPurchase        Boolean @default(false)
   coverImageUrl     String?
   notes             String?

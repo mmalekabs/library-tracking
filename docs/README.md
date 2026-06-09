@@ -5,7 +5,9 @@ This folder contains two layers of documentation for **Personal Library Tracker*
 | Document | Audience | Purpose |
 |----------|----------|---------|
 | [GENERAL.md](./GENERAL.md) | You, collaborators, future you (quick orientation) | What the app does, how it is structured, how to run and deploy it |
-| [DETAILED.md](./DETAILED.md) | Deep reference when changing code | Every route, component, service, env var, migration step, Goodreads/Missing covers, merge entities, add-to-library flow, and where to edit for common future changes |
+| [DETAILED.md](./DETAILED.md) | Deep reference when changing code | Every route, component, service, env var, migration step, Goodreads/Missing covers, merge entities, add-to-library flow, books table sort/columns, Add from Goodreads, Gift/Total value, entity tabs, and (on `reading-tracking` branch) the reading tracker |
+
+**Git branches:** `main` = library tracker. `reading-tracking` = library tracker + reading tracker module — see [README.md](../README.md#branches).
 
 **Also see (repo root):**
 

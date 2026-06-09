@@ -74,6 +74,7 @@ export function serializeBook(
       savings: calculateSavings(book.purchasePrice, book.marketPrice),
       ...(includeAdminFields && {
         isPubliclyVisible: book.isPubliclyVisible,
+        isGift: book.isGift,
         toPurchase: book.toPurchase,
         notes: book.notes,
       }),
@@ -194,6 +195,8 @@ function buildOrderBy(
       return { isbn: direction };
     case "isPubliclyVisible":
       return { isPubliclyVisible: direction };
+    case "isGift":
+      return { isGift: direction };
     case "dateAdded":
     default:
       return { dateAdded: direction };
@@ -313,6 +316,7 @@ function bookDataFromInput(
     dateStartedReading: input.dateStartedReading,
     dateFinishedReading: input.dateFinishedReading,
     isPubliclyVisible: input.isPubliclyVisible,
+    isGift: input.isGift,
     toPurchase: input.toPurchase,
     coverImageUrl,
     notes: input.notes,
