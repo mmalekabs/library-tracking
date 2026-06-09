@@ -76,6 +76,7 @@ export function serializeBook(
         isPubliclyVisible: book.isPubliclyVisible,
         isGift: book.isGift,
         toPurchase: book.toPurchase,
+        readingOnly: book.readingOnly,
         notes: book.notes,
       }),
     };
@@ -98,10 +99,14 @@ function buildWhereClause(
   if (publicOnly) {
     where.isPubliclyVisible = true;
     where.toPurchase = publicCollection === "to_purchase";
+    if (publicCollection === "library") {
+      where.readingOnly = false;
+    }
   } else if (query.collection === "to_purchase") {
     where.toPurchase = true;
   } else {
     where.toPurchase = false;
+    where.readingOnly = false;
   }
 
   if (!publicOnly) {

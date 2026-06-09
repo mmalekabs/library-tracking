@@ -92,6 +92,8 @@ model Book {
   isPubliclyVisible Boolean @default(true)
   isGift            Boolean @default(false)
   toPurchase        Boolean @default(false)
+  /// Tracked in reading tracker only — excluded from library catalog and public site.
+  readingOnly       Boolean @default(false)
   coverImageUrl     String?
   notes             String?
 
@@ -112,6 +114,7 @@ model Book {
   @@index([format])
   @@index([isPubliclyVisible])
   @@index([toPurchase])
+  @@index([readingOnly])
   @@index([authorId])
   @@index([publisherId])
 }

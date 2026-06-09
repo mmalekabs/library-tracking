@@ -33,6 +33,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 25. [Add from Goodreads](#25-add-from-goodreads)
 26. [Gift field and Total value KPI](#26-gift-field-and-total-value-kpi)
 27. [Reading tracker (`reading-tracking` branch)](#27-reading-tracker-reading-tracking-branch)
+28. [Reading-only books & Goodreads add-to-read](#28-reading-only-books--goodreads-add-to-read)
 
 ---
 
@@ -120,8 +121,9 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/components/admin/*` | Forms, tables, `MoveToLibraryModal.tsx`, `SortableTableHeader.tsx`, `BookTableColumnsModal.tsx`, `EntityBooksModal.tsx` |
 | `src/components/admin/bookTableColumns.ts` | Column order persistence (`localStorage`) |
 | `src/pages/public/*` | Catalog + wishlist pages |
-| `src/pages/admin/*` | Admin screens incl. `MissingCoversPage.tsx`, `FromGoodreadsPage.tsx` |
-| `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, `entities.ts`, …) |
+| `src/pages/admin/*` | Admin screens incl. `MissingCoversPage.tsx`, `FromGoodreadsPage.tsx`, `ReadingPage.tsx`, `FromGoodreadsReadingPage.tsx` (**reading branch**) |
+| `src/components/reading/*` | Reading tracker modals (`SessionFormModal`, `ManageSessionsModal`, …) (**reading branch**) |
+| `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, `reading.ts`, `goodreadsDraft.ts`, …) |
 | `src/utils/formatElapsed.ts` | Timer display for bulk cover fetch |
 | `src/constants/*` | Enums labels, pagination, CSV fields |
 | `src/types/index.ts` | Shared TS interfaces |
@@ -213,6 +215,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `isPubliclyVisible` | boolean | Default `true` |
 | `isGift` | boolean | Default `false` — received as a gift |
 | `toPurchase` | boolean | Default `false` — wishlist flag |
+| `readingOnly` | boolean | Default `false` — reading tracker only; excluded from library list and public catalog (**`reading-tracking` branch**) |
 | `coverImageUrl`, `notes` | string? | `notes` admin-only in API |
 | `authorId` | FK? → Author | Primary author; **nullable** for wishlist books (`toPurchase: true`) |
 | `publisherId` | FK? → Publisher | |
@@ -233,6 +236,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `20250526120000_optional_author` | `Book.authorId` nullable (wishlist without author) |
 | `20250528120000_book_is_gift` | `Book.isGift` boolean default `false` |
 | `20250527120000_reading_tracker` | `ReadingEntry`, `ReadingSession` — **`reading-tracking` branch only** |
+| `20250529120000_book_reading_only` | `Book.readingOnly` boolean + index — **`reading-tracking` branch only** |
 
 **Apply locally:** `cd server && npx prisma migrate deploy`  
 **Apply on Railway:** `preDeployCommand` in `server/railway.toml`
@@ -278,8 +282,10 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 
 | `collection` | `toPurchase` filter | Default admin page |
 |--------------|---------------------|-------------------|
-| `library` (default) | `toPurchase = false` | `/admin/books` |
+| `library` (default) | `toPurchase = false` **and** `readingOnly = false` | `/admin/books` |
 | `to_purchase` | `toPurchase = true` | `/admin/to-purchase` |
+
+**Reading-only books** (`readingOnly = true`, `toPurchase = false`) are excluded from the library list and public catalog; they appear only in the reading tracker (`GET /api/admin/reading/books`). See §28.
 
 Optional `visibility`: `all` | `public` | `hidden` → filters `isPubliclyVisible`
 
@@ -287,7 +293,7 @@ Optional `visibility`: `all` | `public` | `hidden` → filters `isPubliclyVisibl
 
 | Route | `publicOnly` | `publicCollection` | Result |
 |-------|--------------|-------------------|--------|
-| `GET /api/books` | true | `library` | Visible library books only |
+| `GET /api/books` | true | `library` | Visible library books only (`readingOnly = false`) |
 | `GET /api/to-purchase` | true | `to_purchase` | Visible wishlist books only |
 
 Public detail: book must be `isPubliclyVisible` **and** match collection (`toPurchase` true/false).
@@ -467,10 +473,15 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | GET | `/entries/:id` | One entry with all sessions |
 | POST | `/entries` | Start a read-through (`bookId`) |
 | PATCH | `/entries/:id` | Update status, rating, review, finish |
+| GET | `/books?search=&limit=` | Books trackable for reading (`toPurchase: false`, library + reading-only) |
+| POST | `/books` | Create **reading-only** book (optional `entry` to start tracking) |
+| GET | `/books/:id` | One reading-only book (for edit form) |
+| PATCH | `/books/:id` | Update reading-only book metadata |
 | POST | `/entries/:id/sessions` | Log daily pages/minutes |
-| DELETE | `/sessions/:id` | Remove a session |
+| PATCH | `/sessions/:id` | Edit session (date, pages, minutes, note) |
+| DELETE | `/sessions/:id` | Remove a session; recalculates entry progress |
 
-**Models:** `ReadingEntry` (one read-through, supports re-reads), `ReadingSession` (daily log). Syncs `Book.status` and reading dates from latest entry. See §27.
+**Models:** `ReadingEntry` (one read-through, supports re-reads), `ReadingSession` (daily log). Syncs `Book.status` and reading dates from latest entry. **Current page** = sum of `pagesRead` across all sessions (capped at `Book.numberOfPages`). See §27–§28.
 
 ---
 
@@ -760,7 +771,9 @@ HTTP Request
 | Import | `ImportPage.tsx` | 4-step wizard: upload → preview → settings → report |
 | From Goodreads | `FromGoodreadsPage.tsx` | Fetch metadata by Id/URL; preview; create book |
 | Missing covers | `MissingCoversPage.tsx` | Books without `coverImageUrl`; Goodreads bulk/single fetch |
-| Reading | `ReadingPage.tsx` | **`reading-tracking` branch** — sessions, history, stats |
+| Reading | `ReadingPage.tsx` | **`reading-tracking` branch** — sessions, history, stats, session edit/delete |
+| Add to read (Goodreads) | `FromGoodreadsReadingPage.tsx` | Goodreads → edit → save reading-only book |
+| Reading book form | `ReadingBookFormPage.tsx` | Create/edit reading-only metadata |
 | Settings | `SettingsPage.tsx` | Change password |
 
 ### Import wizard steps (`ImportPage.tsx`)
@@ -781,7 +794,8 @@ HTTP Request
 | `books.ts` | List, CRUD, visibility, `moveBookToLibrary(id, data)`, missing covers, `hasGoodreadsBookId` | `/books`, `/to-purchase`, `/admin/books` |
 | `goodreads.ts` | `fetchGoodreadsCover`, `fetchGoodreadsBook` | `/admin/goodreads/cover/:id`, `/admin/goodreads/book?input=` |
 | `entities.ts` | Author/publisher CRUD, merge, list with `collection`/`sortBy` | `/admin/authors`, `/admin/publishers` |
-| `reading.ts` | Reading tracker API wrappers | `/admin/reading/*` (**`reading-tracking` branch**) |
+| `reading.ts` | Reading tracker API wrappers (entries, sessions, reading-only books) | `/admin/reading/*` (**`reading-tracking` branch**) |
+| `goodreadsDraft.ts` | Goodreads → reading book form draft | Used by `FromGoodreadsReadingPage` |
 | `lookup.ts` | `fetchAdminAuthors`, etc. | `/admin/lookup/*` |
 | `stats.ts` | One function per stat endpoint | `/admin/stats/*` |
 | `import.ts` | `executeCsvImport`, types | `/admin/import/csv` |
@@ -1228,7 +1242,7 @@ Alternative to manual **Add book** and **Import CSV**: enter Goodreads **Book Id
 
 `GET /api/admin/goodreads/book?input={idOrUrl}`
 
-**Response fields (preview):** `title`, `authorName`, `additionalAuthorNames`, `coverImageUrl`, `isbn` / `isbn13`, `numberOfPages`, `yearPublished`, `publisherName`, `format`, `binding`, `description`, `goodreadsBookId`, `goodreadsUrl`, `existingBook` (if `externalId` already in DB)
+**Response fields (preview):** `title`, `authorName`, `additionalAuthorNames`, `coverImageUrl`, `isbn` / `isbn13`, `numberOfPages`, `yearPublished`, `publisherName`, `format`, `binding`, `description` (preview only — **not** written to `Book.notes`), `goodreadsBookId`, `goodreadsUrl`, `existingBook` (`{ id, title, readingOnly }` if `externalId` already in DB)
 
 ### Parsing strategy (`goodreadsService.fetchBookDataByBookId`)
 
@@ -1243,8 +1257,8 @@ Alternative to manual **Add book** and **Import CSV**: enter Goodreads **Book Id
 1. Enter Id/URL → **Fetch book**
 2. Preview card + link to Goodreads
 3. Optional **Add to purchase list** checkbox
-4. **Add to library** / **Add to purchase list** → `createBook` → redirect to edit form
-5. If `existingBook` set, show warning with link (no duplicate create)
+4. **Add to library** / **Add to purchase list** → `createBook` (notes left empty) → redirect to edit form
+5. If `existingBook` set, show warning with link to library edit or reading-only edit (no duplicate create)
 
 ### Files
 
@@ -1277,7 +1291,7 @@ Alternative to manual **Add book** and **Import CSV**: enter Goodreads **Book Id
 
 ## 27. Reading tracker (`reading-tracking` branch)
 
-> **Not on `main`.** Check out branch `reading-tracking` for this module. Run migration `20250527120000_reading_tracker` after switching.
+> **Not on `main`.** Check out branch `reading-tracking` for this module. Run migrations `20250527120000_reading_tracker` and `20250529120000_book_reading_only` after switching.
 
 ### Data model
 
@@ -1290,7 +1304,8 @@ One read-through of a book (supports **re-reads**).
 | `bookId` | FK → Book |
 | `status` | READING, READ, DID_NOT_FINISH, ON_HOLD |
 | `startedAt`, `finishedAt` | |
-| `currentPage`, `rating`, `review` | |
+| `currentPage` | Stored on row; **derived** from session totals (see below) |
+| `rating`, `review` | |
 | `sessions` | One-to-many `ReadingSession` |
 
 #### `ReadingSession`
@@ -1300,8 +1315,21 @@ Daily reading log.
 | Field | Notes |
 |-------|-------|
 | `sessionDate` | Date |
-| `pagesRead`, `minutesRead` | |
-| `endPage`, `note` | Optional |
+| `pagesRead`, `minutesRead` | `pagesRead` drives progress |
+| `note` | Optional text |
+| `endPage` | Legacy column; **not used** for progress (new sessions set `null`) |
+
+#### Progress / current page
+
+`readingService.computeCurrentPage()`:
+
+```
+currentPage = min( Σ session.pagesRead , book.numberOfPages )
+```
+
+- Returned as `progressPage` and `currentPage` in API responses
+- Recalculated after **log**, **edit**, or **delete** session (`recalculateEntryProgress`)
+- No manual “current page” field on the session form — only **pages read** per session
 
 **Sync:** `readingService.syncBookFromEntries()` updates `Book.status`, `dateStartedReading`, `dateFinishedReading` from the active or latest finished entry.
 
@@ -1313,24 +1341,90 @@ Route: `/admin/reading`
 
 | Tab | Content |
 |-----|---------|
-| Reading now | Active entries, progress %, log session, pause, finish |
-| History | Paginated finished / DNF with ratings, pages, time |
+| Reading now | Active entries, progress %, log session, **Sessions** (manage), pause, finish |
+| History | Paginated finished / DNF; **Sessions** column links to session manager |
 | Statistics | Daily / weekly / monthly / annual charts (pages + minutes) |
 | Time per book | Aggregated minutes, pages, calendar days, re-read count |
 
-**Modals:** `StartReadingModal`, `LogSessionModal`, `FinishReadingModal` (`components/reading/`)
+**Header:** **From Goodreads** link → `/admin/reading/from-goodreads`
+
+**Modals / components** (`components/reading/`):
+
+| Component | Purpose |
+|-----------|---------|
+| `StartReadingModal` | Search trackable books; add manually; link to Goodreads |
+| `SessionFormModal` | Log or **edit** a session |
+| `ManageSessionsModal` | List all sessions; edit / delete with confirm |
+| `FinishReadingModal` | Mark read or DNF with rating |
+| `AddReadingBookModal` | Quick add reading-only book + optional status |
+| `ReadingBookForm` | Full metadata form (create/edit reading-only book) |
 
 ### Client library
 
-`lib/reading.ts` — `fetchReadingSummary`, `fetchCurrentlyReading`, `fetchReadingHistory`, `fetchReadingStats`, `fetchBookTimeStats`, `startReading`, `updateReadingEntry`, `logReadingSession`
+`lib/reading.ts` — `fetchReadingSummary`, `fetchCurrentlyReading`, `fetchReadingHistory`, `fetchReadingStats`, `fetchBookTimeStats`, `fetchReadableBooks`, `fetchReadingEntry`, `fetchReadingOnlyBook`, `createReadingOnlyBook`, `updateReadingOnlyBook`, `startReading`, `updateReadingEntry`, `logReadingSession`, `updateReadingSession`, `deleteReadingSession`
+
+`lib/goodreadsDraft.ts` — map Goodreads preview → reading book form draft (notes empty)
 
 ### Files (branch)
 
 | Area | Paths |
 |------|-------|
-| Schema | `prisma/schema.prisma`, `migrations/20250527120000_reading_tracker` |
+| Schema | `prisma/schema.prisma`, `migrations/20250527120000_reading_tracker`, `migrations/20250529120000_book_reading_only` |
 | Server | `services/readingService.ts`, `routes/admin/reading.ts`, `validators/reading.ts` |
-| Client | `pages/admin/ReadingPage.tsx`, `components/reading/*`, `lib/reading.ts` |
+| Client | `pages/admin/ReadingPage.tsx`, `pages/admin/FromGoodreadsReadingPage.tsx`, `pages/admin/ReadingBookFormPage.tsx`, `components/reading/*`, `lib/reading.ts`, `lib/goodreadsDraft.ts` |
+
+---
+
+## 28. Reading-only books & Goodreads add-to-read
+
+> **`reading-tracking` branch only.**
+
+### `Book.readingOnly`
+
+| Flag | `toPurchase` | `readingOnly` | Appears in |
+|------|--------------|---------------|------------|
+| Library book | `false` | `false` | `/admin/books`, public catalog |
+| Wishlist | `true` | `false` | `/admin/to-purchase`, public wishlist |
+| Reading-only | `false` | `true` | Reading tracker only (not library catalog or public site) |
+
+`bookService.buildWhereClause()` excludes `readingOnly: true` from admin **Books** list and public **library** catalog.
+
+### Add books to read (not in library)
+
+1. **Start reading** → **Add book not in library** (`AddReadingBookModal`) — title, author, format, pages, status
+2. **Start reading** → **Add from Goodreads** or `/admin/reading/from-goodreads`
+3. After save, **Start reading** again to begin a `ReadingEntry` (unless created with `entry` in API)
+
+### Goodreads add-to-read flow
+
+Route: `/admin/reading/from-goodreads` (`FromGoodreadsReadingPage.tsx`)
+
+1. Enter Book Id or URL → `GET /api/admin/goodreads/book?input=`
+2. Preview (description shown for reference only)
+3. **Continue to edit** → `/admin/reading/books/new` with `location.state.draft` from `goodreadsToReadingBookDraft()`
+4. **Save book** → `POST /api/admin/reading/books` → redirect to `/admin/reading/books/:id/edit`
+
+Duplicate Goodreads Id: `existingBook.readingOnly` determines link target (reading edit vs library edit).
+
+### Reading-only book API
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/api/admin/reading/books` | Create; optional nested `entry` to start tracking immediately |
+| GET | `/api/admin/reading/books/:id` | Detail for edit form |
+| PATCH | `/api/admin/reading/books/:id` | Update metadata |
+
+Fields: `title`, `externalId`, author/publisher names, ISBN, format, binding, pages, years, cover, notes, etc.
+
+### Session management
+
+| Action | API | UI |
+|--------|-----|-----|
+| Log | `POST /entries/:id/sessions` | **Log session** on active entry |
+| Edit | `PATCH /sessions/:id` | **Sessions** modal → pencil icon |
+| Delete | `DELETE /sessions/:id` | **Sessions** modal → trash + confirm |
+
+After edit/delete, server runs `recalculateEntryProgress()` so totals and progress bar stay in sync.
 
 ---
 
@@ -1356,6 +1450,9 @@ Route: `/admin/reading`
 | `/admin/from-goodreads` | `pages/admin/FromGoodreadsPage.tsx` |
 | `/admin/missing-covers` | `pages/admin/MissingCoversPage.tsx` |
 | `/admin/reading` | `pages/admin/ReadingPage.tsx` (**`reading-tracking` branch**) |
+| `/admin/reading/from-goodreads` | `pages/admin/FromGoodreadsReadingPage.tsx` (**`reading-tracking` branch**) |
+| `/admin/reading/books/new` | `pages/admin/ReadingBookFormPage.tsx` (**`reading-tracking` branch**) |
+| `/admin/reading/books/:id/edit` | `pages/admin/ReadingBookFormPage.tsx` (**`reading-tracking` branch**) |
 | `/admin/settings` | `pages/admin/SettingsPage.tsx` |
 
 ---

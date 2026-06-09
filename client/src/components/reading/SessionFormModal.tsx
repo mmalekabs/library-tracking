@@ -1,39 +1,64 @@
-import { useState } from "react";
-import type { ReadingEntry } from "@/lib/reading";
+import { useEffect, useState } from "react";
+import type { ReadingEntry, ReadingSessionSummary } from "@/lib/reading";
 import { inputClass } from "@/components/admin/FormSection";
 
-interface LogSessionModalProps {
+export interface SessionFormData {
+  sessionDate: string;
+  pagesRead: number;
+  minutesRead: number | null;
+  note: string;
+}
+
+interface SessionFormModalProps {
   entry: ReadingEntry | null;
+  session?: ReadingSessionSummary | null;
   open: boolean;
   saving?: boolean;
   onClose: () => void;
-  onSubmit: (data: {
-    sessionDate: string;
-    pagesRead: number;
-    minutesRead: number | null;
-    endPage: number | null;
-    note: string;
-  }) => void;
+  onSubmit: (data: SessionFormData) => void;
 }
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function LogSessionModal({
+export function SessionFormModal({
   entry,
+  session,
   open,
   saving,
   onClose,
   onSubmit,
-}: LogSessionModalProps) {
+}: SessionFormModalProps) {
+  const isEdit = Boolean(session);
   const [sessionDate, setSessionDate] = useState(todayIso());
   const [pagesRead, setPagesRead] = useState("");
   const [minutesRead, setMinutesRead] = useState("");
-  const [endPage, setEndPage] = useState("");
   const [note, setNote] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+    if (session) {
+      setSessionDate(session.sessionDate);
+      setPagesRead(String(session.pagesRead));
+      setMinutesRead(
+        session.minutesRead != null ? String(session.minutesRead) : "",
+      );
+      setNote(session.note ?? "");
+    } else {
+      setSessionDate(todayIso());
+      setPagesRead("");
+      setMinutesRead("");
+      setNote("");
+    }
+  }, [open, session]);
+
   if (!open || !entry) return null;
+
+  const projectedPage =
+    (entry.progressPage || 0) -
+    (session?.pagesRead ?? 0) +
+    (Number.parseInt(pagesRead, 10) || 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,18 +66,19 @@ export function LogSessionModal({
       sessionDate,
       pagesRead: Number.parseInt(pagesRead, 10) || 0,
       minutesRead: minutesRead ? Number.parseInt(minutesRead, 10) : null,
-      endPage: endPage ? Number.parseInt(endPage, 10) : null,
       note: note.trim(),
     });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
       >
-        <h3 className="text-lg font-semibold text-gray-900">Log reading session</h3>
+        <h3 className="text-lg font-semibold text-gray-900">
+          {isEdit ? "Edit session" : "Log reading session"}
+        </h3>
         <p className="mt-1 text-sm text-gray-600" dir="auto">
           {entry.book.title}
         </p>
@@ -92,24 +118,22 @@ export function LogSessionModal({
               />
             </label>
           </div>
-          <label className="block text-sm">
-            <span className="font-medium text-gray-700">
-              Current page (optional)
-            </span>
-            <input
-              type="number"
-              min={0}
-              max={entry.book.numberOfPages ?? undefined}
-              value={endPage}
-              onChange={(e) => setEndPage(e.target.value)}
-              className={`${inputClass} mt-1`}
-              placeholder={
-                entry.book.numberOfPages
-                  ? `of ${entry.book.numberOfPages}`
-                  : "Page number"
-              }
-            />
-          </label>
+          {entry.book.numberOfPages ? (
+            <p className="text-xs text-gray-500">
+              Current page is calculated from all logged pages
+              {pagesRead.trim() !== "" && (
+                <>
+                  {" "}
+                  — will be ~{Math.min(projectedPage, entry.book.numberOfPages)}{" "}
+                  of {entry.book.numberOfPages}
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Current page is the sum of pages logged across all sessions.
+            </p>
+          )}
           <label className="block text-sm">
             <span className="font-medium text-gray-700">Note</span>
             <textarea
@@ -136,7 +160,7 @@ export function LogSessionModal({
             disabled={saving}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Log session"}
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Log session"}
           </button>
         </div>
       </form>

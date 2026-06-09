@@ -58,8 +58,9 @@ Every book row has a boolean **`toPurchase`**:
 |------------|--------------|------------|-------------|
 | **Library** (owned / reading list) | `false` | `/admin/books` | `/` (catalog) |
 | **To purchase** (wishlist) | `true` | `/admin/to-purchase` | `/to-purchase` |
+| **Reading-only** *(reading branch)* | `false` + `readingOnly: true` | Reading tracker only | *(not public)* |
 
-A book is in **one** collection at a time. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then moves the book to your library.
+A book is in **one** collection at a time (library vs wishlist). **Reading-only** books are a separate flag for titles tracked outside your owned library. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then moves the book to your library.
 
 Wishlist books may be saved **without an author**; author is required when adding to the library or when saving a library book.
 
@@ -106,7 +107,7 @@ Login at `/admin/login`. After login:
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
 | **From Goodreads** | Enter Book Id or URL → fetch metadata → add to library or wishlist (alternative to manual add / CSV) |
 | **Missing covers** | List books without cover images; bulk or single fetch from Goodreads |
-| **Reading** | *( **`reading-tracking` branch only** )* Sessions, history, re-reads, period stats |
+| **Reading** | *( **`reading-tracking` branch only** )* Sessions, history, re-reads, period stats; books not in library; Goodreads import |
 | **Settings** | Change admin password |
 
 **Books / To Purchase UI:**
@@ -129,12 +130,23 @@ Login at `/admin/login`. After login:
 - Select two or more rows → **Merge selected** → pick which name to keep; all linked books are reassigned
 - Title, search, add, and merge controls stay **sticky** below the admin header while you scroll the list
 
-**Add from Goodreads:**
+**Add from Goodreads (library / wishlist):**
 
 - `/admin/from-goodreads` — paste numeric **Book Id** or full `goodreads.com/book/show/…` URL
-- Fetches title, author(s), cover, ISBN, pages, year, format/binding, description (as notes)
-- Preview then **Add to library** or **Add to purchase list**; warns if that Goodreads Id already exists
+- Fetches title, author(s), cover, ISBN, pages, year, format/binding
+- Description may appear in the preview only — it is **not** saved to book notes
+- Preview then **Add to library** or **Add to purchase list**; warns if that Goodreads Id already exists (library or reading-only book)
 - Third way to add books alongside manual form and CSV import
+
+**Reading tracker** *( **`reading-tracking` branch only** )*:
+
+- `/admin/reading` — tabs: **Reading now**, **History**, **Statistics**, **Time per book**
+- Track books you **don’t own** (PDF, ebook, borrowed) via **`readingOnly`** books — excluded from **Books** catalog and public site
+- **Start reading** — pick from library + reading-only books, add manually, or use **From Goodreads**
+- `/admin/reading/from-goodreads` — fetch Goodreads metadata → **Continue to edit** → save (no description in notes)
+- `/admin/reading/books/new` and `/admin/reading/books/:id/edit` — form for reading-only book metadata
+- **Log session** — date, pages read, minutes, optional note; **current page** = sum of **pages read** across all sessions (capped at book length)
+- **Sessions** — view, **edit**, or **delete** any logged session (Reading now + History)
 
 **Covers from Goodreads:**
 
@@ -211,13 +223,14 @@ The project was built incrementally:
 | 15 | Dashboard total value KPI; **Gift?** (`isGift`) on books |
 | 16 | Add from Goodreads page (full metadata fetch by Id/URL) |
 | 17 | Reading tracker (sessions, history, re-reads, stats) — **`reading-tracking` branch** |
+| 18 | Reading-only books (`readingOnly`), Goodreads add-to-read, session edit/delete, auto current page — **`reading-tracking` branch** |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 
 ### Branch note
 
 - **`main`** — library management features (through phase 16 above).
-- **`reading-tracking`** — same app plus the **Reading** admin section and `ReadingEntry` / `ReadingSession` database tables. Merge or cherry-pick between branches as needed; run migrations after switching.
+- **`reading-tracking`** — same app plus the **Reading** admin section, `ReadingEntry` / `ReadingSession` tables, and `Book.readingOnly`. Merge or cherry-pick between branches as needed; run migrations after switching (including `20250529120000_book_reading_only` on the reading branch).
 
 ---
 

@@ -156,18 +156,19 @@ You can run the client before Railway is ready — the catalog page will show **
 | 14 | Dashboard **Total value** (sum of market prices); **Gift?** on books | ✅ Done |
 | 15 | **Add from Goodreads** — fetch full book metadata by Id or URL | ✅ Done |
 | 16 | **Reading tracker** (sessions, history, stats) | ✅ On `reading-tracking` branch only |
+| 17 | Reading-only books, Goodreads add-to-read, session edit/delete, auto current page | ✅ On `reading-tracking` branch only |
 
 See `LIBRARY_APP_SPEC.pdf` for the full specification.
 
 ### Admin highlights
 
 - **Books** and **To Purchase** default to **grid view** (switch to **table** for inline editing, **sortable headers**, and **Columns** to reorder fields)
-- **Add from Goodreads** (`/admin/from-goodreads`) — enter Book Id or URL; preview title, author, cover, ISBN, pages, etc.; add to library or wishlist
+- **Add from Goodreads** (`/admin/from-goodreads`) — enter Book Id or URL; preview metadata; add to library or wishlist (description not saved to notes)
 - **Missing covers** (`/admin/missing-covers`) — fetch covers from Goodreads when **Book Id** is set; bulk run shows a live timer and fetched count
 - **Fetch cover** on the book form uses the same Goodreads Book Id field
 - **Authors / Publishers** — **My library** / **To purchase** tabs; click a name or book count to see linked books; merge duplicates
 - **Dashboard** — **Total value** KPI (sum of market prices); **Gift?** checkbox on books (form + table)
-- **Reading** (`/admin/reading`) — on **`reading-tracking`** branch: log sessions, history, re-reads, period stats
+- **Reading** (`/admin/reading`) — on **`reading-tracking`** branch: log/edit/delete sessions, history, re-reads, period stats; track books not in library; add from Goodreads (`/admin/reading/from-goodreads`); current page = sum of logged pages
 
 ## Documentation
 

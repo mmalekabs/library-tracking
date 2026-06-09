@@ -25,7 +25,7 @@ export interface GoodreadsBookData {
   bookFormatLabel: string | null;
   description: string | null;
   language: string | null;
-  existingBook: { id: string; title: string } | null;
+  existingBook: { id: string; title: string; readingOnly: boolean } | null;
 }
 
 export function fetchGoodreadsCover(bookId: string) {

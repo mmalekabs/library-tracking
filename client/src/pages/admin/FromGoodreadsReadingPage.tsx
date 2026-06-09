@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookPlus, Download, ExternalLink } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { Download, ExternalLink, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 import { ApiError } from "@/lib/api";
-import { createBook } from "@/lib/books";
-import {
-  fetchGoodreadsBook,
-  type GoodreadsBookData,
-} from "@/lib/goodreads";
+import { fetchGoodreadsBook, type GoodreadsBookData } from "@/lib/goodreads";
+import { goodreadsToReadingBookDraft } from "@/lib/goodreadsDraft";
 import { FORMAT_OPTIONS, BINDING_OPTIONS } from "@/constants/book";
 import { inputClass } from "@/components/admin/FormSection";
 
@@ -25,40 +22,27 @@ function fieldLabel(label: string, value: string | number | null | undefined) {
   );
 }
 
-export function FromGoodreadsPage() {
+export function FromGoodreadsReadingPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<GoodreadsBookData | null>(null);
-  const [toPurchase, setToPurchase] = useState(false);
 
   const fetchMutation = useMutation({
     mutationFn: fetchGoodreadsBook,
     onSuccess: (data) => {
       setPreview(data);
       if (data.existingBook) {
-        toast.error("This Goodreads book is already in your library");
+        toast(
+          data.existingBook.readingOnly
+            ? "This book is already tracked outside your library"
+            : "This book is already in your library",
+        );
       } else {
         toast.success("Book data fetched from Goodreads");
       }
     },
     onError: (err) =>
       toast.error(err instanceof ApiError ? err.message : "Fetch failed"),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: createBook,
-    onSuccess: (book) => {
-      queryClient.invalidateQueries({ queryKey: ["books"] });
-      toast.success(toPurchase ? "Added to purchase list" : "Book added");
-      navigate(
-        toPurchase
-          ? `/admin/to-purchase/${book.id}/edit`
-          : `/admin/books/${book.id}/edit`,
-      );
-    },
-    onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : "Could not add book"),
   });
 
   const handleFetch = (e: React.FormEvent) => {
@@ -70,46 +54,37 @@ export function FromGoodreadsPage() {
     fetchMutation.mutate(input.trim());
   };
 
-  const handleAdd = () => {
+  const handleContinue = () => {
     if (!preview) return;
     if (preview.existingBook) {
-      toast.error("Book already exists — open it from the link below");
+      navigate(
+        preview.existingBook.readingOnly
+          ? `/admin/reading/books/${preview.existingBook.id}/edit`
+          : `/admin/books/${preview.existingBook.id}/edit`,
+      );
       return;
     }
-    if (!preview.authorName && !toPurchase) {
-      toast.error("Author is required for library books");
-      return;
-    }
-
-    createMutation.mutate({
-      title: preview.title,
-      externalId: preview.goodreadsBookId,
-      authorName: preview.authorName ?? undefined,
-      additionalAuthorNames: preview.additionalAuthorNames,
-      publisherName: preview.publisherName ?? undefined,
-      isbn: preview.isbn,
-      isbn13: preview.isbn13,
-      numberOfPages: preview.numberOfPages,
-      yearPublished: preview.yearPublished,
-      originalPublicationYear: preview.originalPublicationYear,
-      coverImageUrl: preview.coverImageUrl,
-      format: preview.format,
-      binding: preview.binding,
-      toPurchase,
-      isPubliclyVisible: !toPurchase,
-      status: "TO_READ",
-      currency: "SAR",
+    navigate("/admin/reading/books/new", {
+      state: { draft: goodreadsToReadingBookDraft(preview) },
     });
   };
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Add from Goodreads</h2>
+      <Link
+        to="/admin/reading"
+        className="text-sm text-primary hover:underline"
+      >
+        ← Back to reading tracker
+      </Link>
+
+      <div className="mb-6 mt-4">
+        <h2 className="text-2xl font-bold text-gray-900">
+          Add to read from Goodreads
+        </h2>
         <p className="mt-1 text-sm text-gray-600">
-          Enter a Goodreads Book Id (from CSV export) or paste a book page URL.
-          We fetch title, author, cover, ISBN, pages, and more — then add it to
-          your library or purchase list.
+          Enter a Goodreads Book Id or URL. We fetch metadata (not the book
+          description) and open an edit form so you can review before saving.
         </p>
       </div>
 
@@ -138,10 +113,6 @@ export function FromGoodreadsPage() {
             {fetchMutation.isPending ? "Fetching…" : "Fetch book"}
           </button>
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Uses the same Book Id as your Goodreads CSV export and the Missing
-          covers page.
-        </p>
       </form>
 
       {preview && (
@@ -212,8 +183,6 @@ export function FromGoodreadsPage() {
                   BINDING_OPTIONS.find((b) => b.value === preview.binding)
                     ?.label,
                 )}
-                {fieldLabel("Language", preview.language)}
-                {fieldLabel("Edition format", preview.bookFormatLabel)}
               </dl>
 
               {preview.description && (
@@ -225,33 +194,14 @@ export function FromGoodreadsPage() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-6">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={toPurchase}
-                onChange={(e) => setToPurchase(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              Add to purchase list (wishlist) instead of library
-            </label>
-
+          <div className="mt-6 border-t border-gray-100 pt-6">
             <button
               type="button"
-              onClick={handleAdd}
-              disabled={
-                createMutation.isPending ||
-                !!preview.existingBook ||
-                (!preview.authorName && !toPurchase)
-              }
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+              onClick={handleContinue}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
             >
-              <BookPlus className="h-4 w-4" aria-hidden />
-              {createMutation.isPending
-                ? "Adding…"
-                : toPurchase
-                  ? "Add to purchase list"
-                  : "Add to library"}
+              <Pencil className="h-4 w-4" aria-hidden />
+              {preview.existingBook ? "Open book" : "Continue to edit"}
             </button>
           </div>
         </div>

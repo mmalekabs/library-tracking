@@ -35,6 +35,7 @@ const pageTitles: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/books": "Books",
   "/admin/reading": "Reading",
+  "/admin/reading/from-goodreads": "Add to read from Goodreads",
   "/admin/to-purchase": "To Purchase",
   "/admin/authors": "Authors",
   "/admin/publishers": "Publishers",

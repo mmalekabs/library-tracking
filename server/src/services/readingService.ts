@@ -3,22 +3,29 @@ import { AppError } from "../middleware/errorHandler.js";
 import { prisma } from "../lib/prisma.js";
 import type {
   CreateReadingEntryInput,
+  CreateReadingOnlyBookInput,
   CreateReadingSessionInput,
+  ReadableBooksQuery,
   ReadingHistoryQuery,
   ReadingStatsQuery,
   UpdateReadingEntryInput,
+  UpdateReadingOnlyBookInput,
+  UpdateReadingSessionInput,
 } from "../validators/reading.js";
+
+const readableBookSelect = {
+  id: true,
+  title: true,
+  numberOfPages: true,
+  coverImageUrl: true,
+  format: true,
+  readingOnly: true,
+  author: { select: { id: true, name: true } },
+} satisfies Prisma.BookSelect;
 
 const entryInclude = {
   book: {
-    select: {
-      id: true,
-      title: true,
-      numberOfPages: true,
-      coverImageUrl: true,
-      format: true,
-      author: { select: { id: true, name: true } },
-    },
+    select: readableBookSelect,
   },
   sessions: {
     orderBy: { sessionDate: "desc" as const },
@@ -73,6 +80,16 @@ async function getEntryTotals(entryId: string) {
     totalMinutes: agg._sum.minutesRead ?? 0,
     sessionCount: agg._count,
   };
+}
+
+function computeCurrentPage(
+  totalPagesRead: number,
+  bookPageCount: number | null,
+): number {
+  if (bookPageCount && bookPageCount > 0) {
+    return Math.min(totalPagesRead, bookPageCount);
+  }
+  return totalPagesRead;
 }
 
 async function syncBookFromEntries(bookId: string) {
@@ -131,7 +148,10 @@ function serializeEntry(
   totals: { totalPagesRead: number; totalMinutes: number; sessionCount: number },
 ) {
   const totalPages = entry.book.numberOfPages;
-  const progressPage = entry.currentPage ?? totals.totalPagesRead;
+  const progressPage = computeCurrentPage(
+    totals.totalPagesRead,
+    totalPages,
+  );
   const progressPercent =
     totalPages && totalPages > 0
       ? Math.min(100, Math.round((progressPage / totalPages) * 1000) / 10)
@@ -154,7 +174,7 @@ function serializeEntry(
     status: entry.status,
     startedAt: entry.startedAt.toISOString(),
     finishedAt: entry.finishedAt?.toISOString() ?? null,
-    currentPage: entry.currentPage,
+    currentPage: progressPage,
     rating: entry.rating,
     review: entry.review,
     createdAt: entry.createdAt.toISOString(),
@@ -252,6 +272,204 @@ export async function getEntryById(id: string) {
   };
 }
 
+async function resolveAuthorId(authorName?: string | null): Promise<string | null> {
+  const trimmed = authorName?.trim();
+  if (!trimmed) return null;
+  const author = await prisma.author.upsert({
+    where: { name: trimmed },
+    update: {},
+    create: { name: trimmed },
+  });
+  return author.id;
+}
+
+async function resolvePublisherId(
+  publisherName?: string | null,
+): Promise<string | null> {
+  const trimmed = publisherName?.trim();
+  if (!trimmed) return null;
+  const publisher = await prisma.publisher.upsert({
+    where: { name: trimmed },
+    update: {},
+    create: { name: trimmed },
+  });
+  return publisher.id;
+}
+
+async function resolveAdditionalAuthorIds(names: string[] = []): Promise<string[]> {
+  const ids: string[] = [];
+  for (const name of names) {
+    const id = await resolveAuthorId(name);
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function normalizeCoverUrl(url?: string | null): string | null {
+  const trimmed = url?.trim();
+  return trimmed || null;
+}
+
+export async function listReadableBooks(query: ReadableBooksQuery) {
+  const where: Prisma.BookWhereInput = { toPurchase: false };
+
+  if (query.search?.trim()) {
+    const term = query.search.trim();
+    where.OR = [
+      { title: { contains: term, mode: "insensitive" } },
+      { author: { name: { contains: term, mode: "insensitive" } } },
+    ];
+  }
+
+  const books = await prisma.book.findMany({
+    where,
+    select: readableBookSelect,
+    orderBy: [{ readingOnly: "asc" }, { title: "asc" }],
+    take: query.limit,
+  });
+
+  return books;
+}
+
+export async function getReadingOnlyBookById(id: string) {
+  const book = await prisma.book.findUnique({
+    where: { id },
+    include: {
+      author: { select: { id: true, name: true } },
+      additionalAuthors: { include: { author: { select: { id: true, name: true } } } },
+      publisher: { select: { id: true, name: true } },
+    },
+  });
+  if (!book || !book.readingOnly) {
+    throw new AppError(404, "NOT_FOUND", "Reading-only book not found");
+  }
+  return {
+    id: book.id,
+    externalId: book.externalId,
+    title: book.title,
+    isbn: book.isbn,
+    isbn13: book.isbn13,
+    format: book.format,
+    binding: book.binding,
+    numberOfPages: book.numberOfPages,
+    yearPublished: book.yearPublished,
+    originalPublicationYear: book.originalPublicationYear,
+    edition: book.edition,
+    coverImageUrl: book.coverImageUrl,
+    notes: book.notes,
+    readingOnly: book.readingOnly,
+    author: book.author,
+    additionalAuthors: book.additionalAuthors.map((aa) => aa.author),
+    publisher: book.publisher,
+  };
+}
+
+export async function updateReadingOnlyBook(
+  id: string,
+  input: UpdateReadingOnlyBookInput,
+) {
+  const existing = await prisma.book.findUnique({ where: { id } });
+  if (!existing?.readingOnly) {
+    throw new AppError(404, "NOT_FOUND", "Reading-only book not found");
+  }
+
+  const authorId =
+    input.authorName !== undefined
+      ? await resolveAuthorId(input.authorName)
+      : undefined;
+
+  const publisherId =
+    input.publisherName !== undefined
+      ? await resolvePublisherId(input.publisherName)
+      : undefined;
+
+  const data: Prisma.BookUncheckedUpdateInput = {};
+  if (input.title !== undefined) data.title = input.title.trim();
+  if (input.externalId !== undefined) data.externalId = input.externalId?.trim() || null;
+  if (authorId !== undefined) data.authorId = authorId;
+  if (publisherId !== undefined) data.publisherId = publisherId;
+  if (input.isbn !== undefined) data.isbn = input.isbn?.trim() || null;
+  if (input.isbn13 !== undefined) data.isbn13 = input.isbn13?.trim() || null;
+  if (input.edition !== undefined) data.edition = input.edition?.trim() || null;
+  if (input.format !== undefined) data.format = input.format;
+  if (input.binding !== undefined) data.binding = input.binding;
+  if (input.numberOfPages !== undefined) data.numberOfPages = input.numberOfPages;
+  if (input.yearPublished !== undefined) data.yearPublished = input.yearPublished;
+  if (input.originalPublicationYear !== undefined) {
+    data.originalPublicationYear = input.originalPublicationYear;
+  }
+  if (input.coverImageUrl !== undefined) {
+    data.coverImageUrl = normalizeCoverUrl(input.coverImageUrl);
+  }
+  if (input.notes !== undefined) data.notes = input.notes?.trim() || null;
+
+  if (input.additionalAuthorNames !== undefined) {
+    const additionalAuthorIds = await resolveAdditionalAuthorIds(
+      input.additionalAuthorNames,
+    );
+    await prisma.bookAdditionalAuthor.deleteMany({ where: { bookId: id } });
+    if (additionalAuthorIds.length > 0) {
+      await prisma.bookAdditionalAuthor.createMany({
+        data: additionalAuthorIds.map((authorId) => ({ bookId: id, authorId })),
+      });
+    }
+  }
+
+  await prisma.book.update({ where: { id }, data });
+  return getReadingOnlyBookById(id);
+}
+
+export async function createReadingOnlyBook(input: CreateReadingOnlyBookInput) {
+  const authorId = await resolveAuthorId(input.authorName);
+  const publisherId = await resolvePublisherId(input.publisherName);
+  const additionalAuthorIds = await resolveAdditionalAuthorIds(
+    input.additionalAuthorNames ?? [],
+  );
+
+  const book = await prisma.book.create({
+    data: {
+      title: input.title.trim(),
+      externalId: input.externalId?.trim() || null,
+      authorId,
+      publisherId,
+      isbn: input.isbn?.trim() || null,
+      isbn13: input.isbn13?.trim() || null,
+      edition: input.edition?.trim() || null,
+      format: input.format ?? "DIGITAL",
+      binding: input.binding ?? "PAPERBACK",
+      numberOfPages: input.numberOfPages ?? null,
+      yearPublished: input.yearPublished ?? null,
+      originalPublicationYear: input.originalPublicationYear ?? null,
+      coverImageUrl: normalizeCoverUrl(input.coverImageUrl),
+      notes: input.notes?.trim() || null,
+      readingOnly: true,
+      toPurchase: false,
+      isPubliclyVisible: false,
+      status: "TO_READ",
+      additionalAuthors: {
+        create: additionalAuthorIds.map((authorId) => ({ authorId })),
+      },
+    },
+    select: readableBookSelect,
+  });
+
+  if (!input.entry) {
+    return { book, entry: null };
+  }
+
+  const entry = await createEntry({
+    bookId: book.id,
+    status: input.entry.status,
+    startedAt: input.entry.startedAt,
+    finishedAt: input.entry.finishedAt,
+    currentPage: input.entry.currentPage,
+    rating: input.entry.rating,
+    review: input.entry.review,
+  });
+
+  return { book, entry };
+}
+
 export async function createEntry(input: CreateReadingEntryInput) {
   const book = await prisma.book.findUnique({ where: { id: input.bookId } });
   if (!book) throw new AppError(404, "NOT_FOUND", "Book not found");
@@ -259,27 +477,39 @@ export async function createEntry(input: CreateReadingEntryInput) {
     throw new AppError(400, "VALIDATION_ERROR", "Cannot track reading for wishlist books");
   }
 
-  const existingActive = await prisma.readingEntry.findFirst({
-    where: {
-      bookId: input.bookId,
-      status: { in: ["READING", "ON_HOLD"] },
-    },
-  });
-  if (existingActive) {
-    throw new AppError(
-      400,
-      "ALREADY_READING",
-      "This book already has an active reading entry",
-    );
+  const status = input.status ?? "READING";
+
+  if (["READING", "ON_HOLD"].includes(status)) {
+    const existingActive = await prisma.readingEntry.findFirst({
+      where: {
+        bookId: input.bookId,
+        status: { in: ["READING", "ON_HOLD"] },
+      },
+    });
+    if (existingActive) {
+      throw new AppError(
+        400,
+        "ALREADY_READING",
+        "This book already has an active reading entry",
+      );
+    }
   }
 
   const startedAt = parseDateInput(input.startedAt) ?? new Date();
+  const finishedAt =
+    status === "READ" || status === "DID_NOT_FINISH"
+      ? (parseDateInput(input.finishedAt) ?? new Date())
+      : null;
 
   const entry = await prisma.readingEntry.create({
     data: {
       bookId: input.bookId,
-      status: "READING",
+      status,
       startedAt,
+      finishedAt,
+      currentPage: null,
+      rating: input.rating ?? null,
+      review: input.review ?? null,
     },
     include: entryInclude,
   });
@@ -312,7 +542,6 @@ export async function updateEntry(id: string, input: UpdateReadingEntryInput) {
   if (input.finishedAt !== undefined && input.status === undefined) {
     data.finishedAt = parseDateInput(input.finishedAt);
   }
-  if (input.currentPage !== undefined) data.currentPage = input.currentPage;
   if (input.rating !== undefined) data.rating = input.rating;
   if (input.review !== undefined) data.review = input.review;
 
@@ -325,6 +554,45 @@ export async function updateEntry(id: string, input: UpdateReadingEntryInput) {
   await syncBookFromEntries(existing.bookId);
   const totals = await getEntryTotals(entry.id);
   return serializeEntry(entry, totals);
+}
+
+async function recalculateEntryProgress(entryId: string) {
+  const entry = await prisma.readingEntry.findUnique({
+    where: { id: entryId },
+    include: { book: { select: { numberOfPages: true } } },
+  });
+  if (!entry) return;
+
+  const totals = await getEntryTotals(entryId);
+  const currentPage =
+    totals.totalPagesRead > 0
+      ? computeCurrentPage(totals.totalPagesRead, entry.book.numberOfPages)
+      : null;
+
+  await prisma.readingEntry.update({
+    where: { id: entryId },
+    data: { currentPage },
+  });
+}
+
+function serializeSession(session: {
+  id: string;
+  sessionDate: Date;
+  pagesRead: number;
+  minutesRead: number | null;
+  endPage: number | null;
+  note: string | null;
+  createdAt: Date;
+}) {
+  return {
+    id: session.id,
+    sessionDate: toDateOnly(session.sessionDate),
+    pagesRead: session.pagesRead,
+    minutesRead: session.minutesRead,
+    endPage: session.endPage,
+    note: session.note,
+    createdAt: session.createdAt.toISOString(),
+  };
 }
 
 export async function logSession(entryId: string, input: CreateReadingSessionInput) {
@@ -346,22 +614,12 @@ export async function logSession(entryId: string, input: CreateReadingSessionInp
       sessionDate: startOfDay(sessionDate),
       pagesRead: input.pagesRead,
       minutesRead: input.minutesRead ?? null,
-      endPage: input.endPage ?? null,
+      endPage: null,
       note: input.note ?? null,
     },
   });
 
-  if (input.endPage != null) {
-    await prisma.readingEntry.update({
-      where: { id: entryId },
-      data: { currentPage: input.endPage },
-    });
-  } else if (input.pagesRead > 0 && entry.currentPage != null) {
-    await prisma.readingEntry.update({
-      where: { id: entryId },
-      data: { currentPage: entry.currentPage + input.pagesRead },
-    });
-  }
+  await recalculateEntryProgress(entryId);
 
   if (entry.status === "ON_HOLD") {
     await prisma.readingEntry.update({
@@ -371,25 +629,50 @@ export async function logSession(entryId: string, input: CreateReadingSessionInp
     await syncBookFromEntries(entry.bookId);
   }
 
-  return {
-    id: session.id,
-    sessionDate: toDateOnly(session.sessionDate),
-    pagesRead: session.pagesRead,
-    minutesRead: session.minutesRead,
-    endPage: session.endPage,
-    note: session.note,
-    createdAt: session.createdAt.toISOString(),
-  };
+  return serializeSession(session);
+}
+
+export async function updateSession(
+  sessionId: string,
+  input: UpdateReadingSessionInput,
+) {
+  const existing = await prisma.readingSession.findUnique({
+    where: { id: sessionId },
+    select: { entryId: true },
+  });
+  if (!existing) throw new AppError(404, "NOT_FOUND", "Session not found");
+
+  const data: Prisma.ReadingSessionUpdateInput = {};
+  if (input.sessionDate !== undefined) {
+    const sessionDate = parseDateInput(input.sessionDate);
+    if (!sessionDate) {
+      throw new AppError(400, "VALIDATION_ERROR", "Invalid session date");
+    }
+    data.sessionDate = startOfDay(sessionDate);
+  }
+  if (input.pagesRead !== undefined) data.pagesRead = input.pagesRead;
+  if (input.minutesRead !== undefined) data.minutesRead = input.minutesRead;
+  if (input.note !== undefined) data.note = input.note?.trim() || null;
+
+  const session = await prisma.readingSession.update({
+    where: { id: sessionId },
+    data,
+  });
+
+  await recalculateEntryProgress(existing.entryId);
+
+  return serializeSession(session);
 }
 
 export async function deleteSession(sessionId: string) {
   const session = await prisma.readingSession.findUnique({
     where: { id: sessionId },
-    select: { entryId: true, entry: { select: { bookId: true } } },
+    select: { entryId: true },
   });
   if (!session) throw new AppError(404, "NOT_FOUND", "Session not found");
 
   await prisma.readingSession.delete({ where: { id: sessionId } });
+  await recalculateEntryProgress(session.entryId);
   return { deleted: true, entryId: session.entryId };
 }
 

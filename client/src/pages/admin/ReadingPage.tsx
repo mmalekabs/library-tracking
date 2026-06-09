@@ -29,18 +29,21 @@ import {
   fetchCurrentlyReading,
   fetchReadingHistory,
   fetchReadingStats,
+  createReadingOnlyBook,
   fetchReadingSummary,
   formatMinutes,
   logReadingSession,
   startReading,
   updateReadingEntry,
+  type CreateReadingOnlyBookInput,
   type ReadingEntry,
 } from "@/lib/reading";
 import { StatCard, ChartBox } from "@/components/admin/stats/StatCard";
 import { TablePagination } from "@/components/admin/TablePagination";
 import { DEFAULT_PAGE_SIZE, type PageSize } from "@/constants/pagination";
 import { STATUS_LABELS } from "@/constants/stats";
-import { LogSessionModal } from "@/components/reading/LogSessionModal";
+import { SessionFormModal } from "@/components/reading/SessionFormModal";
+import { ManageSessionsModal } from "@/components/reading/ManageSessionsModal";
 import { FinishReadingModal } from "@/components/reading/FinishReadingModal";
 import { StartReadingModal } from "@/components/reading/StartReadingModal";
 
@@ -70,12 +73,14 @@ function ProgressBar({ percent }: { percent: number | null }) {
 function EntryCard({
   entry,
   onLog,
+  onManageSessions,
   onFinish,
   onPause,
   onResume,
 }: {
   entry: ReadingEntry;
   onLog: () => void;
+  onManageSessions: () => void;
   onFinish: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -95,13 +100,27 @@ function EntryCard({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <Link
-            to={`/admin/books/${entry.bookId}/edit`}
-            className="font-semibold text-gray-900 hover:text-primary"
-            dir="auto"
-          >
-            {entry.book.title}
-          </Link>
+          {entry.book.readingOnly ? (
+            <p className="font-semibold text-gray-900" dir="auto">
+              <Link
+                to={`/admin/reading/books/${entry.bookId}/edit`}
+                className="hover:text-primary"
+              >
+                {entry.book.title}
+              </Link>
+              <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                Not in library
+              </span>
+            </p>
+          ) : (
+            <Link
+              to={`/admin/books/${entry.bookId}/edit`}
+              className="font-semibold text-gray-900 hover:text-primary"
+              dir="auto"
+            >
+              {entry.book.title}
+            </Link>
+          )}
           <p className="text-sm text-gray-500" dir="auto">
             {entry.book.author?.name ?? "Unknown author"}
           </p>
@@ -131,6 +150,15 @@ function EntryCard({
           <FileText className="h-3.5 w-3.5" />
           Log session
         </button>
+        {entry.sessionCount > 0 && (
+          <button
+            type="button"
+            onClick={onManageSessions}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Sessions ({entry.sessionCount})
+          </button>
+        )}
         <button
           type="button"
           onClick={onFinish}
@@ -184,6 +212,7 @@ export function ReadingPage() {
     "day" | "week" | "month" | "year"
   >("month");
   const [logEntry, setLogEntry] = useState<ReadingEntry | null>(null);
+  const [sessionsEntry, setSessionsEntry] = useState<ReadingEntry | null>(null);
   const [finishEntry, setFinishEntry] = useState<ReadingEntry | null>(null);
   const [startOpen, setStartOpen] = useState(false);
 
@@ -228,6 +257,22 @@ export function ReadingPage() {
     mutationFn: (bookId: string) => startReading(bookId),
     onSuccess: () => {
       toast.success("Started reading");
+      setStartOpen(false);
+      invalidate();
+    },
+    onError: mutationError,
+  });
+
+  const addExternalMutation = useMutation({
+    mutationFn: (input: CreateReadingOnlyBookInput) =>
+      createReadingOnlyBook(input),
+    onSuccess: (result) => {
+      const status = result.entry?.status ?? "READING";
+      toast.success(
+        status === "READ" || status === "DID_NOT_FINISH"
+          ? "Book added to reading history"
+          : "Book added — tracking started",
+      );
       setStartOpen(false);
       invalidate();
     },
@@ -282,14 +327,22 @@ export function ReadingPage() {
             Track what you read, log pages and time, and view your history.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setStartOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Start reading
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/admin/reading/from-goodreads"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            From Goodreads
+          </Link>
+          <button
+            type="button"
+            onClick={() => setStartOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Start reading
+          </button>
+        </div>
       </div>
 
       {summary && (
@@ -361,6 +414,7 @@ export function ReadingPage() {
               key={entry.id}
               entry={entry}
               onLog={() => setLogEntry(entry)}
+              onManageSessions={() => setSessionsEntry(entry)}
               onFinish={() => setFinishEntry(entry)}
               onPause={() =>
                 updateMutation.mutate(
@@ -397,6 +451,7 @@ export function ReadingPage() {
                   <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">Rating</th>
                   <th className="px-4 py-3">Days</th>
+                  <th className="px-4 py-3">Sessions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -405,6 +460,11 @@ export function ReadingPage() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900" dir="auto">
                         {entry.book.title}
+                        {entry.book.readingOnly && (
+                          <span className="ml-1.5 text-xs font-normal text-amber-700">
+                            (not in library)
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-500" dir="auto">
                         {entry.book.author?.name}
@@ -430,6 +490,19 @@ export function ReadingPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {entry.calendarDays ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {entry.sessionCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setSessionsEntry(entry)}
+                          className="text-sm font-medium text-primary hover:underline"
+                        >
+                          {entry.sessionCount}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -585,11 +658,13 @@ export function ReadingPage() {
         open={startOpen}
         activeBookIds={activeBookIds}
         saving={startMutation.isPending}
+        addingExternal={addExternalMutation.isPending}
         onClose={() => setStartOpen(false)}
         onSelect={(bookId) => startMutation.mutate(bookId)}
+        onAddExternal={(input) => addExternalMutation.mutate(input)}
       />
 
-      <LogSessionModal
+      <SessionFormModal
         entry={logEntry}
         open={logEntry !== null}
         saving={sessionMutation.isPending}
@@ -598,6 +673,13 @@ export function ReadingPage() {
           if (!logEntry) return;
           sessionMutation.mutate({ entryId: logEntry.id, data });
         }}
+      />
+
+      <ManageSessionsModal
+        entry={sessionsEntry}
+        open={sessionsEntry !== null}
+        onClose={() => setSessionsEntry(null)}
+        onChanged={invalidate}
       />
 
       <FinishReadingModal

@@ -4,10 +4,15 @@ import { sendPaginated, sendSuccess } from "../../utils/response.js";
 import * as readingService from "../../services/readingService.js";
 import {
   createReadingEntrySchema,
+  createReadingOnlyBookSchema,
   createReadingSessionSchema,
+  readableBooksQuerySchema,
   readingHistoryQuerySchema,
   readingStatsQuerySchema,
   updateReadingEntrySchema,
+  updateReadingOnlyBookSchema,
+  updateReadingSessionSchema,
+  type ReadableBooksQuery,
   type ReadingHistoryQuery,
   type ReadingStatsQuery,
 } from "../../validators/reading.js";
@@ -16,6 +21,46 @@ import { validateQuery } from "../../validators/query.js";
 import { paramId } from "../../utils/params.js";
 
 const router = Router();
+
+router.get(
+  "/books",
+  validateQuery(readableBooksQuerySchema),
+  asyncHandler(async (req, res) => {
+    const query = (req as typeof req & { validatedQuery: ReadableBooksQuery })
+      .validatedQuery;
+    sendSuccess(res, await readingService.listReadableBooks(query));
+  }),
+);
+
+router.post(
+  "/books",
+  validateBody(createReadingOnlyBookSchema),
+  asyncHandler(async (req, res) => {
+    const result = await readingService.createReadingOnlyBook(req.body);
+    sendSuccess(res, result, 201);
+  }),
+);
+
+router.get(
+  "/books/:id",
+  asyncHandler(async (req, res) => {
+    sendSuccess(
+      res,
+      await readingService.getReadingOnlyBookById(paramId(req.params.id)),
+    );
+  }),
+);
+
+router.patch(
+  "/books/:id",
+  validateBody(updateReadingOnlyBookSchema),
+  asyncHandler(async (req, res) => {
+    sendSuccess(
+      res,
+      await readingService.updateReadingOnlyBook(paramId(req.params.id), req.body),
+    );
+  }),
+);
 
 router.get(
   "/summary",
@@ -95,6 +140,17 @@ router.post(
       req.body,
     );
     sendSuccess(res, session, 201);
+  }),
+);
+
+router.patch(
+  "/sessions/:id",
+  validateBody(updateReadingSessionSchema),
+  asyncHandler(async (req, res) => {
+    sendSuccess(
+      res,
+      await readingService.updateSession(paramId(req.params.id), req.body),
+    );
   }),
 );
 

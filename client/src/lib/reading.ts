@@ -1,7 +1,7 @@
 import { apiFetch } from "./api";
 import { AUTH_TOKEN_KEY } from "./constants";
 import type { PaginationMeta } from "./books";
-import type { ReadingStatus } from "@/types";
+import type { BindingType, BookFormat, ReadingStatus } from "@/types";
 
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "/api";
@@ -12,6 +12,17 @@ export interface ReadingEntryBook {
   numberOfPages: number | null;
   coverImageUrl: string | null;
   format: string;
+  readingOnly: boolean;
+  author: { id: string; name: string } | null;
+}
+
+export interface ReadableBook {
+  id: string;
+  title: string;
+  numberOfPages: number | null;
+  coverImageUrl: string | null;
+  format: string;
+  readingOnly: boolean;
   author: { id: string; name: string } | null;
 }
 
@@ -22,6 +33,11 @@ export interface ReadingSessionSummary {
   minutesRead: number | null;
   endPage: number | null;
   note: string | null;
+  createdAt?: string;
+}
+
+export interface ReadingEntryDetail extends ReadingEntry {
+  sessions: ReadingSessionSummary[];
 }
 
 export interface ReadingEntry {
@@ -146,10 +162,104 @@ export function fetchBookTimeStats() {
   return apiFetch<BookTimeStat[]>("/admin/reading/stats/books");
 }
 
-export function startReading(bookId: string, startedAt?: string) {
+export function fetchReadableBooks(params?: { search?: string; limit?: number }) {
+  const q = new URLSearchParams();
+  if (params?.search) q.set("search", params.search);
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return apiFetch<ReadableBook[]>(
+    `/admin/reading/books${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export interface ReadingOnlyBookDetail {
+  id: string;
+  externalId: string | null;
+  title: string;
+  isbn: string | null;
+  isbn13: string | null;
+  format: BookFormat;
+  binding: BindingType;
+  numberOfPages: number | null;
+  yearPublished: number | null;
+  originalPublicationYear: number | null;
+  edition: string | null;
+  coverImageUrl: string | null;
+  notes: string | null;
+  readingOnly: boolean;
+  author: { id: string; name: string } | null;
+  additionalAuthors: { id: string; name: string }[];
+  publisher: { id: string; name: string } | null;
+}
+
+export interface CreateReadingOnlyBookInput {
+  title: string;
+  externalId?: string | null;
+  authorName?: string | null;
+  additionalAuthorNames?: string[];
+  publisherName?: string | null;
+  isbn?: string | null;
+  isbn13?: string | null;
+  edition?: string | null;
+  format?: BookFormat;
+  binding?: BindingType;
+  numberOfPages?: number | null;
+  yearPublished?: number | null;
+  originalPublicationYear?: number | null;
+  coverImageUrl?: string | null;
+  notes?: string | null;
+  entry?: {
+    status?: "READING" | "READ" | "DID_NOT_FINISH" | "ON_HOLD";
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    currentPage?: number | null;
+    rating?: number | null;
+    review?: string | null;
+  };
+}
+
+export type UpdateReadingOnlyBookInput = Partial<
+  Omit<CreateReadingOnlyBookInput, "entry">
+>;
+
+export function fetchReadingOnlyBook(id: string) {
+  return apiFetch<ReadingOnlyBookDetail>(`/admin/reading/books/${id}`);
+}
+
+export function createReadingOnlyBook(input: CreateReadingOnlyBookInput) {
+  return apiFetch<{ book: ReadableBook; entry: ReadingEntry | null }>(
+    "/admin/reading/books",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function updateReadingOnlyBook(
+  id: string,
+  input: UpdateReadingOnlyBookInput,
+) {
+  return apiFetch<ReadingOnlyBookDetail>(`/admin/reading/books/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function startReading(
+  bookId: string,
+  options?: {
+    startedAt?: string;
+    status?: "READING" | "ON_HOLD";
+  },
+) {
   return apiFetch<ReadingEntry>("/admin/reading/entries", {
     method: "POST",
-    body: JSON.stringify({ bookId, startedAt }),
+    body: JSON.stringify({
+      bookId,
+      startedAt: options?.startedAt,
+      status: options?.status,
+    }),
   });
 }
 
@@ -169,6 +279,10 @@ export function updateReadingEntry(
   });
 }
 
+export function fetchReadingEntry(id: string) {
+  return apiFetch<ReadingEntryDetail>(`/admin/reading/entries/${id}`);
+}
+
 export function logReadingSession(
   entryId: string,
   data: {
@@ -185,6 +299,29 @@ export function logReadingSession(
       method: "POST",
       body: JSON.stringify(data),
     },
+  );
+}
+
+export function updateReadingSession(
+  sessionId: string,
+  data: {
+    sessionDate?: string;
+    pagesRead?: number;
+    minutesRead?: number | null;
+    endPage?: number | null;
+    note?: string | null;
+  },
+) {
+  return apiFetch<ReadingSessionSummary>(`/admin/reading/sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteReadingSession(sessionId: string) {
+  return apiFetch<{ deleted: boolean; entryId: string }>(
+    `/admin/reading/sessions/${sessionId}`,
+    { method: "DELETE" },
   );
 }
 
