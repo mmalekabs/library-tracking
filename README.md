@@ -4,6 +4,15 @@ A personal library management web app with a public catalog and a private admin 
 
 **Stack:** React (Vite + TypeScript) · Express · PostgreSQL (Railway) · Prisma
 
+## Branches
+
+| Branch | Contents |
+|--------|----------|
+| **`main`** | **Library tracker** — books, wishlist, authors/publishers, CSV import, stats dashboard, Goodreads tools, table sorting/column order, etc. |
+| **`reading-tracking`** | Everything on `main` **plus** a full **reading tracker** (sessions, history, re-reads, daily/weekly/monthly/annual stats). Use this branch if you want reading tracking alongside the library. |
+
+Deploy and run migrations for the branch you are on (`npx prisma migrate deploy` in `server/`).
+
 ## Project structure
 
 ```
@@ -141,14 +150,24 @@ You can run the client before Railway is ready — the catalog page will show **
 | 8 | To Purchase collection + public wishlist | ✅ Done |
 | 9 | Admin grid/table views, inline table edit, pagination | ✅ Done |
 | 10 | Goodreads cover fetch + Missing covers admin page | ✅ Done |
+| 11 | Merge authors/publishers, optional wishlist author, add-to-library modal | ✅ Done |
+| 12 | Books table: sortable columns + reorderable column layout | ✅ Done |
+| 13 | Authors/Publishers: library vs wishlist tabs, sortable columns, book drill-down | ✅ Done |
+| 14 | Dashboard **Total value** (sum of market prices); **Gift?** on books | ✅ Done |
+| 15 | **Add from Goodreads** — fetch full book metadata by Id or URL | ✅ Done |
+| 16 | **Reading tracker** (sessions, history, stats) | ✅ On `reading-tracking` branch only |
 
 See `LIBRARY_APP_SPEC.pdf` for the full specification.
 
 ### Admin highlights
 
-- **Books** and **To Purchase** default to **grid view** (switch to table for inline editing)
+- **Books** and **To Purchase** default to **grid view** (switch to **table** for inline editing, **sortable headers**, and **Columns** to reorder fields)
+- **Add from Goodreads** (`/admin/from-goodreads`) — enter Book Id or URL; preview title, author, cover, ISBN, pages, etc.; add to library or wishlist
 - **Missing covers** (`/admin/missing-covers`) — fetch covers from Goodreads when **Book Id** is set; bulk run shows a live timer and fetched count
 - **Fetch cover** on the book form uses the same Goodreads Book Id field
+- **Authors / Publishers** — **My library** / **To purchase** tabs; click a name or book count to see linked books; merge duplicates
+- **Dashboard** — **Total value** KPI (sum of market prices); **Gift?** checkbox on books (form + table)
+- **Reading** (`/admin/reading`) — on **`reading-tracking`** branch: log sessions, history, re-reads, period stats
 
 ## Documentation
 

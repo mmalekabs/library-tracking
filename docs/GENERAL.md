@@ -98,19 +98,22 @@ Login at `/admin/login`. After login:
 
 | Section | Purpose |
 |---------|---------|
-| **Dashboard** | Charts and KPIs (reading, spending, formats, etc.) |
-| **Books** | Library collection — grid or **table** with inline edit |
+| **Dashboard** | Charts and KPIs (reading status, spending, **total value**, formats, etc.) |
+| **Books** | Library collection — grid or **table** with inline edit, **sortable columns**, **column reorder** |
 | **To Purchase** | Wishlist — same UI patterns as Books |
-| **Authors** | Create/rename/delete authors; **merge** duplicates; sticky search/toolbar while scrolling |
+| **Authors** | **My library** / **To purchase** tabs; sortable columns; click name/count → books modal; **merge** duplicates; sticky toolbar |
 | **Publishers** | Same as authors (including merge) |
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
+| **From Goodreads** | Enter Book Id or URL → fetch metadata → add to library or wishlist (alternative to manual add / CSV) |
 | **Missing covers** | List books without cover images; bulk or single fetch from Goodreads |
+| **Reading** | *( **`reading-tracking` branch only** )* Sessions, history, re-reads, period stats |
 | **Settings** | Change admin password |
 
 **Books / To Purchase UI:**
 
 - **Grid view** (default): cards with visibility / delete / **Add to library** (wishlist only)
-- **Table view**: click a cell to edit; click outside the table → confirmation modal if changed
+- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); click a cell to edit; click outside the table → confirmation modal if changed
+- **Gift?** column — mark books received as gifts (also on book form under Pricing)
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
 
 **Add to library (To Purchase):**
@@ -120,13 +123,30 @@ Login at `/admin/login`. After login:
 
 **Authors / Publishers:**
 
+- **My library** / **To purchase** tabs — lists and book counts reflect that collection only
+- Click an **author/publisher name** or **book count** → modal listing their books in the current tab
+- Sortable **Name** and **Books** column headers
 - Select two or more rows → **Merge selected** → pick which name to keep; all linked books are reassigned
 - Title, search, add, and merge controls stay **sticky** below the admin header while you scroll the list
+
+**Add from Goodreads:**
+
+- `/admin/from-goodreads` — paste numeric **Book Id** or full `goodreads.com/book/show/…` URL
+- Fetches title, author(s), cover, ISBN, pages, year, format/binding, description (as notes)
+- Preview then **Add to library** or **Add to purchase list**; warns if that Goodreads Id already exists
+- Third way to add books alongside manual form and CSV import
 
 **Covers from Goodreads:**
 
 - On the book form, set **Goodreads Book Id** (`externalId`, same as CSV “Book Id”) and use **Fetch cover**
 - On **Missing covers**, fetch one row or **Fetch all with Goodreads Id** — live timer and progress counts update without reloading the page
+- **Add from Goodreads** uses the same scraper stack but returns full metadata, not only the cover
+
+**Dashboard pricing KPIs:**
+
+- **Total spent** — sum of purchase prices
+- **Total value** — sum of **market / actual prices** (books with a market price set)
+- **Total savings** — where both prices exist
 
 ---
 
@@ -186,8 +206,18 @@ The project was built incrementally:
 | 10 | GitHub-ready secrets handling (`SECURITY.md`, `.gitignore`) |
 | 11 | Goodreads cover fetch (form + Missing covers page with live progress) |
 | 12 | Merge authors/publishers; optional wishlist author; add-to-library modal; sticky entity toolbar |
+| 13 | Books table: server-side sortable columns + client column reorder (Columns modal) |
+| 14 | Authors/Publishers: collection tabs, sortable columns, clickable book lists |
+| 15 | Dashboard total value KPI; **Gift?** (`isGift`) on books |
+| 16 | Add from Goodreads page (full metadata fetch by Id/URL) |
+| 17 | Reading tracker (sessions, history, re-reads, stats) — **`reading-tracking` branch** |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
+
+### Branch note
+
+- **`main`** — library management features (through phase 16 above).
+- **`reading-tracking`** — same app plus the **Reading** admin section and `ReadingEntry` / `ReadingSession` database tables. Merge or cherry-pick between branches as needed; run migrations after switching.
 
 ---
 
