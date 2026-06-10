@@ -26,7 +26,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 18. [Migrations cookbook](#18-migrations-cookbook)
 19. [Cookbook: common future edits](#19-cookbook-common-future-edits)
 20. [Known limitations and recommended improvements](#20-known-limitations-and-recommended-improvements)
-21. [Goodreads covers and Missing covers page](#21-goodreads-covers-and-missing-covers-page)
+21. [Goodreads metadata and Missing info page](#21-goodreads-metadata-and-missing-info-page)
 22. [Author/publisher merge and add-to-library flow](#22-authorpublisher-merge-and-add-to-library-flow)
 23. [Books table sorting and column order](#23-books-table-sorting-and-column-order)
 24. [Authors/publishers tabs and book drill-down](#24-authorspublishers-tabs-and-book-drill-down)
@@ -34,6 +34,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 26. [Gift field and Total value KPI](#26-gift-field-and-total-value-kpi)
 27. [Reading tracker (`reading-tracking` branch)](#27-reading-tracker-reading-tracking-branch)
 28. [Reading-only books & Goodreads add-to-read](#28-reading-only-books--goodreads-add-to-read)
+29. [Import from Bookmory](#29-import-from-bookmory)
 
 ---
 
@@ -121,7 +122,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/components/admin/*` | Forms, tables, `MoveToLibraryModal.tsx`, `SortableTableHeader.tsx`, `BookTableColumnsModal.tsx`, `EntityBooksModal.tsx` |
 | `src/components/admin/bookTableColumns.ts` | Column order persistence (`localStorage`) |
 | `src/pages/public/*` | Catalog + wishlist pages |
-| `src/pages/admin/*` | Admin screens incl. `MissingCoversPage.tsx`, `FromGoodreadsPage.tsx`, `ReadingPage.tsx`, `FromGoodreadsReadingPage.tsx` (**reading branch**) |
+| `src/pages/admin/*` | Admin screens incl. `MissingInfoPage.tsx`, `BookmoryImportPage.tsx`, `FromGoodreadsPage.tsx`, `ReadingPage.tsx`, `FromGoodreadsReadingPage.tsx` (**reading branch**) |
 | `src/components/reading/*` | Reading tracker modals (`SessionFormModal`, `ManageSessionsModal`, …) (**reading branch**) |
 | `src/lib/*` | API wrappers (`books.ts`, `goodreads.ts`, `reading.ts`, `goodreadsDraft.ts`, …) |
 | `src/utils/formatElapsed.ts` | Timer display for bulk cover fetch |
@@ -380,9 +381,12 @@ Base URL: `/api`. Responses use `{ success, data, ... }` or paginated `{ data, p
 | PATCH | `/:id/visibility` | `{ isPubliclyVisible }` |
 | PATCH | `/bulk-visibility` | `{ ids[], isPubliclyVisible }` |
 | DELETE | `/bulk-delete` | `{ ids[] }` |
-| GET | `/missing-covers/summary` | `?collection=all\|library\|to_purchase` — counts without cover |
-| GET | `/missing-covers` | Paginated list of books missing `coverImageUrl` |
-| POST | `/bulk-fetch-covers` | Server-side bulk fetch (optional; UI uses client-side loop) |
+| GET | `/missing-info/summary` | Counts missing cover, ISBN-13, market price |
+| GET | `/missing-info` | Paginated books missing cover, ISBN-13, and/or market price |
+| POST | `/bulk-fetch-covers` | NDJSON stream — bulk Goodreads covers |
+| POST | `/bulk-fetch-isbn` | NDJSON stream — bulk ISBN-13 from Goodreads |
+| POST | `/bulk-fetch-market-price` | NDJSON stream — bulk market price from عصير الكتب |
+| GET | `/api/admin/aseeralkotb/price/:isbn13` | Lookup list price; returns market price with 10% discount |
 | POST | `/:id/move-to-library` | Wishlist → library with required metadata (`moveToLibrarySchema`) |
 
 **List query highlights** (`bookListQuerySchema`):
@@ -512,9 +516,9 @@ HTTP Request
 | `updateBook` | Partial update; replace additional authors / shelves if provided |
 | `setBookVisibility` | Toggle `isPubliclyVisible` |
 | `bulkSetVisibility` / `bulkDeleteBooks` | Batch ops |
-| `getMissingCoversSummary` | Counts books without cover, with/without valid Goodreads Id |
-| `listBooksMissingCovers` | Paginated missing-cover list; optional `withGoodreadsIdOnly` filter |
-| `bulkFetchGoodreadsCovers` | Server loop with ~800ms delay (used by API; admin UI may fetch client-side) |
+| `getMissingInfoSummary` | Counts missing cover, ISBN-13, market price; Goodreads/price fetchability |
+| `listBooksMissingInfo` | Paginated missing-info list; optional `withGoodreadsIdOnly` filter |
+| `bulkFetchGoodreadsCovers` / `bulkFetchIsbn13` / `bulkFetchMarketPrice` | Server loops with ~800ms delay; NDJSON progress callbacks |
 | `moveBookToLibrary` | Wishlist → library with validated metadata |
 | `listPublicAuthors` etc. | Filter lists for public catalog |
 
@@ -566,7 +570,7 @@ HTTP Request
 
 **Admin app** — `ProtectedRoute` → `AdminLayout`:
 
-- Dashboard, books, to-purchase, authors, publishers, import, from-goodreads, missing-covers, settings
+- Dashboard, books, to-purchase, authors, publishers, import, bookmory import, from-goodreads, missing-info, recent-additions, settings
 - **`reading-tracking` branch:** also `/admin/reading`
 - Shared `BookFormPage` for `/admin/books/new`, `/admin/books/:id/edit`, `/admin/to-purchase/new`, `/admin/to-purchase/:id/edit`
 
@@ -602,7 +606,7 @@ HTTP Request
 #### `AdminLayout.tsx`
 
 - Desktop sidebar + mobile hamburger drawer
-- `navItems` array drives menu (Dashboard, Books, To Purchase, Authors, Publishers, Import, From Goodreads, Missing covers, Settings; **Reading** on `reading-tracking` branch)
+- `navItems` array drives menu (Dashboard, Books, To Purchase, Authors, Publishers, Import, Bookmory, From Goodreads, Missing info, Recent additions, Settings; **Reading** on `reading-tracking` branch)
 - `pageTitles` for header title; special cases for `/new` and `/edit` paths
 - Logout clears auth and redirects to login
 - “View public catalog” link to `/`
@@ -735,14 +739,14 @@ HTTP Request
 
 - Dashboard layout wrappers for Recharts
 
-#### `MissingCoversPage.tsx`
+#### `MissingInfoPage.tsx`
 
-- Route: `/admin/missing-covers`
-- Summary cards: total missing, fetchable (valid Goodreads Id), no Id
-- **Fetch all with Goodreads Id**: client-side sequential fetch (~800ms between books) so UI can update live
+- Route: `/admin/missing-info` (legacy `/admin/missing-covers`)
+- Summary cards: missing cover, ISBN-13, market price; fetchable counts
+- Bulk **Fetch covers**, **Fetch ISBN-13**, **Fetch prices** — server NDJSON stream with live progress
 - Live **elapsed timer** (`formatElapsed`) and **Fetched X of Y** progress bar
 - After each success: updates TanStack Query cache (summary + table row removed without full page reload)
-- Per-row **Fetch** uses same Goodreads + `updateBook` flow as the book form
+- Per-row actions use Goodreads, عصير الكتب, and `updateBook` flows
 
 ---
 
@@ -770,7 +774,9 @@ HTTP Request
 | Publishers | `PublishersPage.tsx` | Same for publishers |
 | Import | `ImportPage.tsx` | 4-step wizard: upload → preview → settings → report |
 | From Goodreads | `FromGoodreadsPage.tsx` | Fetch metadata by Id/URL; preview; create book |
-| Missing covers | `MissingCoversPage.tsx` | Books without `coverImageUrl`; Goodreads bulk/single fetch |
+| Missing info | `MissingInfoPage.tsx` | Missing cover, ISBN-13, market price; Goodreads + عصير الكتب bulk/single fetch |
+| Bookmory import | `BookmoryImportPage.tsx` | Preview/import; goodreadsID; update Goodreads Id only mode |
+| Recent additions | `RecentAdditionsPage.tsx` | Bulk delete recently imported books by date |
 | Reading | `ReadingPage.tsx` | **`reading-tracking` branch** — sessions, history, stats, session edit/delete |
 | Add to read (Goodreads) | `FromGoodreadsReadingPage.tsx` | Goodreads → edit → save reading-only book |
 | Reading book form | `ReadingBookFormPage.tsx` | Create/edit reading-only metadata |
@@ -1079,45 +1085,54 @@ Would need: new auth provider, user model changes, new routes — start from `au
 | Public catalog pagination | Fixed 20/page, not 10–100 | Reuse `TablePagination` or shared hook |
 | Single admin user | One `Admin` row from seed | New table if multi-user needed |
 | No image upload | Cover is URL only | Add storage (S3/R2) + upload route |
-| Rate limits | 300 req/15min API | Tune in `rateLimiter.ts` |
+| Rate limits | 300 req/15min on **public** `/api` only; `/api/auth` and `/api/admin` excluded | Tune in `rateLimiter.ts` |
 | `externalId` duplicates | Import skip/overwrite logic | Document in import UI |
 | Grid vs table feature parity | Grid has quick visibility; table edits Public column | Align or document |
 | Goodreads rate limits | Scraping book pages; ~800ms delay in bulk | Respect Goodreads ToS; consider official API later |
-| Bulk fetch on Missing covers | Runs in browser (one book per request) | Keeps UI live; long lists need tab left open |
+| Bulk fetch on Missing info | Server-side with NDJSON progress stream | ~800ms delay between books on server |
 
 ---
 
-## 21. Goodreads covers and Missing covers page
+## 21. Goodreads metadata and Missing info page
 
 ### Goodreads Book Id
 
-Stored as `Book.externalId` (unique). CSV import maps column **Book Id** to this field. Must be **numeric** for fetch (`isValidGoodreadsBookId`).
+Stored as `Book.externalId` (unique). CSV import maps column **Book Id** to this field. Bookmory import maps **`goodreadsID`** (and aliases). Books **table** column **Goodreads Id** (`goodreadsId` in `bookTableEdit.ts`). Must be **numeric** for fetch (`isValidGoodreadsBookId`).
 
-### Where to fetch covers
+### Missing info page
 
-| UI | Flow |
-|----|------|
-| Book form | Enter Id → **Fetch cover** → fills `coverImageUrl` (save form to persist) |
-| Missing covers | Row **Fetch** or **Fetch all with Goodreads Id** |
+Route: `/admin/missing-info` (legacy `/admin/missing-covers` redirects). Lists books missing **any** of: cover, ISBN-13 (empty or not 13 digits), market price.
 
-### Missing covers API
+| Action | Source |
+|--------|--------|
+| Fetch cover | Goodreads Book Id → `coverImageUrl` |
+| Fetch ISBN-13 | Goodreads Book Id → `isbn13` (replaces empty or invalid) |
+| Fetch price | ISBN-13 → [عصير الكتب](https://www.aseeralkotb.com/) list price × **0.9** → `marketPrice` |
+
+### Missing info API
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET .../missing-covers/summary?collection=` | `{ totalMissing, withGoodreadsId, withoutGoodreadsId }` |
-| `GET .../missing-covers?...` | Paginated books where `coverImageUrl` is null/empty |
-| `POST .../bulk-fetch-covers` | Server-side bulk (optional; page uses client loop for live UI) |
+| `GET .../missing-info/summary?collection=` | `{ totalMissing, missingCover, missingIsbn13, missingMarketPrice, withGoodreadsId, canFetchFromGoodreads, canFetchPrice, ... }` |
+| `GET .../missing-info?...` | Paginated missing-info list |
+| `POST .../bulk-fetch-covers` | NDJSON stream — bulk covers |
+| `POST .../bulk-fetch-isbn` | NDJSON stream — bulk ISBN-13 |
+| `POST .../bulk-fetch-market-price` | NDJSON stream — bulk market price |
+| `GET .../aseeralkotb/price/:isbn13?title=` | Single price lookup |
 
 Query params for list: `page`, `limit`, `search`, `collection`, `withGoodreadsIdOnly` (`true`/`false`).
 
-### Client bulk fetch behavior
+### Bulk fetch streaming
 
-1. Paginate through all fetchable books (`withGoodreadsIdOnly: true`, `limit: 100`)
-2. For each: `fetchGoodreadsCover` → `updateBook` with `coverImageUrl`
-3. Update summary + remove row from list via `queryClient.setQueryData`
-4. Show elapsed clock and **Fetched X of Y** until complete
+Server bulk endpoints return **NDJSON** (`application/x-ndjson`): progress events `{ type: "progress", current, total, updated, failed, currentTitle }` then `{ type: "done", data }`. Client parses via XHR (`lib/books.ts` `streamBulkFetch`). UI shows elapsed clock and **Fetched X of Y**.
 
-**Edit delay:** `BULK_FETCH_DELAY_MS` in `MissingCoversPage.tsx` (800).
+**Server delay:** `BULK_FETCH_DELAY_MS` in `bookService.ts` (800).
+
+### Auth & rate limits
+
+- JWT expires in **7 days**; session clears only on **401**, not on rate-limit or network errors (`AuthContext.tsx`)
+- **Public** catalog routes: 300 req / 15 min (`publicApiRateLimiter`)
+- **`/api/auth`** and **`/api/admin`** mounted **before** the public limiter (bulk fetch no longer blocks login)
 
 ### Files to touch
 
@@ -1125,9 +1140,12 @@ Query params for list: `page`, `limit`, `search`, `collection`, `withGoodreadsId
 |--------|-------|
 | Goodreads scrape logic | `server/src/services/goodreadsService.ts` |
 | Cover + full book API | `server/src/routes/admin/goodreads.ts`, `validators/goodreads.ts` |
-| Missing covers data | `server/src/services/bookService.ts`, `validators/book.ts`, `routes/admin/books.ts` |
-| Admin UI | `MissingCoversPage.tsx`, `FromGoodreadsPage.tsx`, `AdminLayout.tsx`, `App.tsx` |
-| Form button | `BookForm.tsx`, `lib/goodreads.ts` |
+| عصير الكتب price | `server/src/services/aseeralkotbService.ts`, `routes/admin/aseeralkotb.ts` |
+| ISBN helpers | `server/src/utils/isbn.ts` |
+| Missing info data | `server/src/services/bookService.ts`, `validators/book.ts`, `routes/admin/books.ts` |
+| NDJSON helper | `server/src/utils/streamNdjson.ts` |
+| Admin UI | `MissingInfoPage.tsx`, `FromGoodreadsPage.tsx`, `AdminLayout.tsx`, `App.tsx` |
+| Form + table | `BookForm.tsx`, `bookTableEdit.ts`, `lib/goodreads.ts`, `lib/aseeralkotb.ts` |
 
 ---
 
@@ -1428,6 +1446,57 @@ After edit/delete, server runs `recalculateEntryProgress()` so totals and progre
 
 ---
 
+## 29. Import from Bookmory
+
+### Purpose
+
+Migrate data from the **Bookmory** reading tracker app with a **preview before merge** workflow.
+
+### Export from Bookmory
+
+1. Bookmory → **Profile** → **Export**
+2. Choose **Excel (.xlsx)** — recommended
+3. Set app language to **English** for best column auto-detection (headers follow app locale)
+4. Upload here — `.csv` or `.json` also accepted
+
+**Not supported:** proprietary `.db` database backups (use Excel export instead).
+
+### API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/admin/bookmory/preview` | Parse file → preview + duplicate detection |
+| POST | `/api/admin/bookmory/import` | Merge with settings JSON |
+
+**Settings:** `duplicateMode` (`skip` \| `overwrite` \| `update_goodreads_id`), `importAs` (default `reading_only`), `isPubliclyVisible`, `importReadingEntries`, `allowMissingAuthor`
+
+**`update_goodreads_id` mode:** match existing book (title, ISBN, or Goodreads Id) → update **`externalId` only** from file; no reading history import.
+
+**Default destination:** reading tracker. Add a **`library`** column (`true` / `false`, lowercase) per row — only `true` rows are added to the library catalog. Override globally with `importAs: library` or `to_purchase`.
+
+### Parsing (`bookmoryParse.ts`)
+
+- **XLSX:** reads first sheet; auto-detects header row (skips Bookmory’s extra top row)
+- **CSV / JSON:** supported with same column mapping
+- Maps columns via aliases (Title, Author, Status, Pages read, dates, tags, **library**, **goodreadsID**, etc.)
+- Maps Bookmory statuses → `ReadingStatus`
+- Reading history: optional `ReadingEntry` + imported session (pages from export)
+
+### UI
+
+Route: `/admin/import/bookmory` — `BookmoryImportPage.tsx`
+
+Steps: **Upload** → **Preview** (column mapping, duplicates, first 50 rows) → **Settings** → **Merge** → report
+
+### Files
+
+| Area | Paths |
+|------|-------|
+| Server | `utils/bookmoryParse.ts`, `services/bookmoryImportService.ts`, `routes/admin/bookmoryImport.ts`, `validators/bookmoryImport.ts` |
+| Client | `pages/admin/BookmoryImportPage.tsx`, `lib/bookmoryImport.ts` |
+
+---
+
 ## Appendix A — Client route → file map
 
 | Route | Component file |
@@ -1447,8 +1516,11 @@ After edit/delete, server runs `recalculateEntryProgress()` so totals and progre
 | `/admin/authors` | `pages/admin/AuthorsPage.tsx` |
 | `/admin/publishers` | `pages/admin/PublishersPage.tsx` |
 | `/admin/import` | `pages/admin/ImportPage.tsx` |
+| `/admin/import/bookmory` | `pages/admin/BookmoryImportPage.tsx` |
 | `/admin/from-goodreads` | `pages/admin/FromGoodreadsPage.tsx` |
-| `/admin/missing-covers` | `pages/admin/MissingCoversPage.tsx` |
+| `/admin/missing-info` | `pages/admin/MissingInfoPage.tsx` |
+| `/admin/missing-covers` | redirects to Missing info |
+| `/admin/recent-additions` | `pages/admin/RecentAdditionsPage.tsx` |
 | `/admin/reading` | `pages/admin/ReadingPage.tsx` (**`reading-tracking` branch**) |
 | `/admin/reading/from-goodreads` | `pages/admin/FromGoodreadsReadingPage.tsx` (**`reading-tracking` branch**) |
 | `/admin/reading/books/new` | `pages/admin/ReadingBookFormPage.tsx` (**`reading-tracking` branch**) |
@@ -1481,9 +1553,14 @@ After edit/delete, server runs `recalculateEntryProgress()` so totals and progre
 | GET | `/api/admin/goodreads/cover/:bookId` | `routes/admin/goodreads.ts` |
 | GET | `/api/admin/goodreads/book?input=` | `routes/admin/goodreads.ts` |
 | * | `/api/admin/reading/*` | `routes/admin/reading.ts` (**`reading-tracking` branch**) |
-| GET | `/api/admin/books/missing-covers/summary` | `routes/admin/books.ts` |
-| GET | `/api/admin/books/missing-covers` | `routes/admin/books.ts` |
-| POST | `/api/admin/books/bulk-fetch-covers` | `routes/admin/books.ts` |
+| GET | `/api/admin/books/missing-info/summary` | `routes/admin/books.ts` |
+| GET | `/api/admin/books/missing-info` | `routes/admin/books.ts` |
+| POST | `/api/admin/books/bulk-fetch-covers` | `routes/admin/books.ts` (NDJSON stream) |
+| POST | `/api/admin/books/bulk-fetch-isbn` | `routes/admin/books.ts` (NDJSON stream) |
+| POST | `/api/admin/books/bulk-fetch-market-price` | `routes/admin/books.ts` (NDJSON stream) |
+| GET | `/api/admin/aseeralkotb/price/:isbn13` | `routes/admin/aseeralkotb.ts` |
+| POST | `/api/admin/bookmory/preview` | `routes/admin/bookmoryImport.ts` |
+| POST | `/api/admin/bookmory/import` | `routes/admin/bookmoryImport.ts` |
 | POST | `/api/admin/books/:id/move-to-library` | `routes/admin/books.ts` |
 | POST | `/api/admin/authors/merge` | `routes/admin/authors.ts` |
 | GET | `/api/admin/authors/:id/books` | `routes/admin/authors.ts` |
@@ -1548,7 +1625,7 @@ Use this when onboarding or auditing completeness.
 **Phase 11 — Goodreads covers**
 
 - `goodreadsService.ts`, `routes/admin/goodreads.ts`
-- `bookService.ts` missing-cover helpers, `MissingCoversPage.tsx`
+- `bookService.ts` missing-info helpers, `MissingInfoPage.tsx`, `aseeralkotbService.ts`
 - `BookForm.tsx` Fetch cover, `lib/goodreads.ts`
 - `AdminBooksList.tsx` default **grid** view
 

@@ -82,6 +82,66 @@ async function getEntryTotals(entryId: string) {
   };
 }
 
+/** Furthest page reached in the book for this entry (from endPage or summed pages). */
+async function getReadingPosition(
+  entryId: string,
+  excludeSessionId?: string,
+): Promise<number> {
+  const sessions = await prisma.readingSession.findMany({
+    where: {
+      entryId,
+      ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+    },
+    orderBy: [{ sessionDate: "asc" }, { createdAt: "asc" }],
+    select: { endPage: true, pagesRead: true },
+  });
+
+  let position = 0;
+  for (const session of sessions) {
+    if (session.endPage != null && session.endPage > position) {
+      position = session.endPage;
+    } else {
+      position += session.pagesRead;
+    }
+  }
+  return position;
+}
+
+async function resolveSessionPages(
+  entryId: string,
+  input: { endPage?: number | null; pagesRead?: number },
+  excludeSessionId?: string,
+): Promise<{ pagesRead: number; endPage: number | null }> {
+  const prior = await getReadingPosition(entryId, excludeSessionId);
+  const entry = await prisma.readingEntry.findUnique({
+    where: { id: entryId },
+    select: { book: { select: { numberOfPages: true } } },
+  });
+  const maxPage = entry?.book.numberOfPages ?? null;
+
+  if (input.endPage != null) {
+    let endPage = Math.max(0, input.endPage);
+    if (maxPage != null && maxPage > 0) {
+      endPage = Math.min(endPage, maxPage);
+    }
+    if (endPage < prior) {
+      throw new AppError(
+        400,
+        "VALIDATION_ERROR",
+        `Last page must be at least ${prior} (your current position)`,
+      );
+    }
+    return { pagesRead: endPage - prior, endPage: endPage > 0 ? endPage : null };
+  }
+
+  const pagesRead = input.pagesRead ?? 0;
+  let endPage = pagesRead > 0 ? prior + pagesRead : null;
+  if (endPage != null && maxPage != null && maxPage > 0) {
+    endPage = Math.min(endPage, maxPage);
+  }
+  return { pagesRead, endPage };
+}
+
 function computeCurrentPage(
   totalPagesRead: number,
   bookPageCount: number | null,
@@ -148,10 +208,9 @@ function serializeEntry(
   totals: { totalPagesRead: number; totalMinutes: number; sessionCount: number },
 ) {
   const totalPages = entry.book.numberOfPages;
-  const progressPage = computeCurrentPage(
-    totals.totalPagesRead,
-    totalPages,
-  );
+  const progressPage =
+    entry.currentPage ??
+    computeCurrentPage(totals.totalPagesRead, totalPages);
   const progressPercent =
     totalPages && totalPages > 0
       ? Math.min(100, Math.round((progressPage / totalPages) * 1000) / 10)
@@ -563,10 +622,10 @@ async function recalculateEntryProgress(entryId: string) {
   });
   if (!entry) return;
 
-  const totals = await getEntryTotals(entryId);
+  const position = await getReadingPosition(entryId);
   const currentPage =
-    totals.totalPagesRead > 0
-      ? computeCurrentPage(totals.totalPagesRead, entry.book.numberOfPages)
+    position > 0
+      ? computeCurrentPage(position, entry.book.numberOfPages)
       : null;
 
   await prisma.readingEntry.update({
@@ -608,13 +667,18 @@ export async function logSession(entryId: string, input: CreateReadingSessionInp
   const sessionDate = parseDateInput(input.sessionDate);
   if (!sessionDate) throw new AppError(400, "VALIDATION_ERROR", "Invalid session date");
 
+  const { pagesRead, endPage } = await resolveSessionPages(entryId, {
+    endPage: input.endPage,
+    pagesRead: input.pagesRead,
+  });
+
   const session = await prisma.readingSession.create({
     data: {
       entryId,
       sessionDate: startOfDay(sessionDate),
-      pagesRead: input.pagesRead,
+      pagesRead,
       minutesRead: input.minutesRead ?? null,
-      endPage: null,
+      endPage,
       note: input.note ?? null,
     },
   });
@@ -638,7 +702,11 @@ export async function updateSession(
 ) {
   const existing = await prisma.readingSession.findUnique({
     where: { id: sessionId },
-    select: { entryId: true },
+    select: {
+      entryId: true,
+      pagesRead: true,
+      endPage: true,
+    },
   });
   if (!existing) throw new AppError(404, "NOT_FOUND", "Session not found");
 
@@ -650,7 +718,20 @@ export async function updateSession(
     }
     data.sessionDate = startOfDay(sessionDate);
   }
-  if (input.pagesRead !== undefined) data.pagesRead = input.pagesRead;
+  if (input.endPage !== undefined || input.pagesRead !== undefined) {
+    const resolved = await resolveSessionPages(
+      existing.entryId,
+      {
+        endPage:
+          input.endPage !== undefined ? input.endPage : existing.endPage,
+        pagesRead:
+          input.pagesRead !== undefined ? input.pagesRead : existing.pagesRead,
+      },
+      sessionId,
+    );
+    data.pagesRead = resolved.pagesRead;
+    data.endPage = resolved.endPage;
+  }
   if (input.minutesRead !== undefined) data.minutesRead = input.minutesRead;
   if (input.note !== undefined) data.note = input.note?.trim() || null;
 

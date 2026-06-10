@@ -52,6 +52,9 @@ export interface Book {
   isPubliclyVisible?: boolean;
   isGift?: boolean;
   toPurchase?: boolean;
+  readingOnly?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   coverImageUrl: string | null;
   notes?: string | null;
   author: Author | null;

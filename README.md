@@ -149,7 +149,7 @@ You can run the client before Railway is ready — the catalog page will show **
 | 7 | Authors / publishers management + mobile admin nav | ✅ Done |
 | 8 | To Purchase collection + public wishlist | ✅ Done |
 | 9 | Admin grid/table views, inline table edit, pagination | ✅ Done |
-| 10 | Goodreads cover fetch + Missing covers admin page | ✅ Done |
+| 10 | Goodreads cover fetch + Missing info admin page | ✅ Done |
 | 11 | Merge authors/publishers, optional wishlist author, add-to-library modal | ✅ Done |
 | 12 | Books table: sortable columns + reorderable column layout | ✅ Done |
 | 13 | Authors/Publishers: library vs wishlist tabs, sortable columns, book drill-down | ✅ Done |
@@ -164,7 +164,9 @@ See `LIBRARY_APP_SPEC.pdf` for the full specification.
 
 - **Books** and **To Purchase** default to **grid view** (switch to **table** for inline editing, **sortable headers**, and **Columns** to reorder fields)
 - **Add from Goodreads** (`/admin/from-goodreads`) — enter Book Id or URL; preview metadata; add to library or wishlist (description not saved to notes)
-- **Missing covers** (`/admin/missing-covers`) — fetch covers from Goodreads when **Book Id** is set; bulk run shows a live timer and fetched count
+- **Missing info** (`/admin/missing-info`) — books missing cover, ISBN-13, and/or market price; fetch cover and ISBN-13 from Goodreads, market price from [عصير الكتب](https://www.aseeralkotb.com/) (10% discount); server bulk with live progress
+- **Import from Bookmory** (`/admin/import/bookmory`) — Excel/CSV/JSON preview; optional **`goodreadsID`** column; **update Goodreads Id only** duplicate mode
+- **Books table** — **Goodreads Id** column (inline edit, sortable)
 - **Fetch cover** on the book form uses the same Goodreads Book Id field
 - **Authors / Publishers** — **My library** / **To purchase** tabs; click a name or book count to see linked books; merge duplicates
 - **Dashboard** — **Total value** KPI (sum of market prices); **Gift?** checkbox on books (form + table)

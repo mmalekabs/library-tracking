@@ -76,15 +76,22 @@ export const bookListQuerySchema = z.object({
       "numberOfPages",
       "yearPublished",
       "isbn",
+      "externalId",
       "isPubliclyVisible",
       "isGift",
       "dateAdded",
+      "createdAt",
     ])
     .default("dateAdded"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
   visibility: z.enum(["all", "public", "hidden"]).optional(),
   /** library = owned books only; to_purchase = wishlist only */
-  collection: z.enum(["library", "to_purchase"]).default("library"),
+  collection: z
+    .enum(["library", "to_purchase", "reading_only", "all"])
+    .default("library"),
+  /** Filter by record creation date (YYYY-MM-DD), inclusive */
+  createdFrom: z.string().optional(),
+  createdTo: z.string().optional(),
 });
 
 export type BookListQuery = z.infer<typeof bookListQuerySchema>;
@@ -184,7 +191,7 @@ export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });
 
-export const missingCoversQuerySchema = z.object({
+export const missingInfoQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   search: z.string().optional(),
@@ -202,15 +209,29 @@ export const bulkFetchCoversSchema = z.object({
   onlyWithGoodreadsId: z.boolean().default(true),
 });
 
-export const missingCoversSummaryQuerySchema = z.object({
+export const bulkFetchIsbnSchema = z.object({
+  bookIds: z.array(z.string().min(1)).optional(),
+  collection: z.enum(["all", "library", "to_purchase"]).default("all"),
+  onlyWithGoodreadsId: z.boolean().default(true),
+});
+
+export const bulkFetchMarketPriceSchema = z.object({
+  bookIds: z.array(z.string().min(1)).optional(),
+  collection: z.enum(["all", "library", "to_purchase"]).default("all"),
+  onlyWithIsbn13: z.boolean().default(true),
+});
+
+export const missingInfoSummaryQuerySchema = z.object({
   collection: z.enum(["all", "library", "to_purchase"]).default("all"),
 });
 
-export type MissingCoversQuery = z.infer<typeof missingCoversQuerySchema>;
-export type MissingCoversSummaryQuery = z.infer<
-  typeof missingCoversSummaryQuerySchema
+export type MissingInfoQuery = z.infer<typeof missingInfoQuerySchema>;
+export type MissingInfoSummaryQuery = z.infer<
+  typeof missingInfoSummaryQuerySchema
 >;
 export type BulkFetchCoversInput = z.infer<typeof bulkFetchCoversSchema>;
+export type BulkFetchIsbnInput = z.infer<typeof bulkFetchIsbnSchema>;
+export type BulkFetchMarketPriceInput = z.infer<typeof bulkFetchMarketPriceSchema>;
 
 export type CreateBookInput = z.infer<typeof createBookSchema>;
 export type UpdateBookInput = z.infer<typeof updateBookSchema>;

@@ -12,14 +12,16 @@ import { SettingsPage } from "@/pages/admin/SettingsPage";
 import { BooksManagePage } from "@/pages/admin/BooksManagePage";
 import { BookFormPage } from "@/pages/admin/BookFormPage";
 import { ImportPage } from "@/pages/admin/ImportPage";
+import { BookmoryImportPage } from "@/pages/admin/BookmoryImportPage";
 import { AuthorsPage } from "@/pages/admin/AuthorsPage";
 import { PublishersPage } from "@/pages/admin/PublishersPage";
 import { ToPurchasePage } from "@/pages/admin/ToPurchasePage";
-import { MissingCoversPage } from "@/pages/admin/MissingCoversPage";
+import { MissingInfoPage } from "@/pages/admin/MissingInfoPage";
 import { ReadingPage } from "@/pages/admin/ReadingPage";
 import { ReadingBookFormPage } from "@/pages/admin/ReadingBookFormPage";
 import { FromGoodreadsPage } from "@/pages/admin/FromGoodreadsPage";
 import { FromGoodreadsReadingPage } from "@/pages/admin/FromGoodreadsReadingPage";
+import { RecentAdditionsPage } from "@/pages/admin/RecentAdditionsPage";
 
 export default function App() {
   return (
@@ -51,8 +53,11 @@ export default function App() {
         <Route path="authors" element={<AuthorsPage />} />
         <Route path="publishers" element={<PublishersPage />} />
         <Route path="import" element={<ImportPage />} />
+        <Route path="import/bookmory" element={<BookmoryImportPage />} />
+        <Route path="recent-additions" element={<RecentAdditionsPage />} />
         <Route path="from-goodreads" element={<FromGoodreadsPage />} />
-        <Route path="missing-covers" element={<MissingCoversPage />} />
+        <Route path="missing-info" element={<MissingInfoPage />} />
+        <Route path="missing-covers" element={<MissingInfoPage />} />
         <Route path="reading" element={<ReadingPage />} />
         <Route path="reading/from-goodreads" element={<FromGoodreadsReadingPage />} />
         <Route path="reading/books/new" element={<ReadingBookFormPage />} />

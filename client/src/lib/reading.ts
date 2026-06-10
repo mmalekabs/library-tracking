@@ -287,9 +287,9 @@ export function logReadingSession(
   entryId: string,
   data: {
     sessionDate: string;
-    pagesRead: number;
+    endPage?: number;
+    pagesRead?: number;
     minutesRead?: number | null;
-    endPage?: number | null;
     note?: string | null;
   },
 ) {

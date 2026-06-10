@@ -49,15 +49,28 @@ export async function apiFetch<T>(
     headers,
   });
 
-  const json = await response.json();
+  let json: { success?: boolean; data?: T; error?: ApiErrorBody["error"] };
+  try {
+    json = await response.json();
+  } catch {
+    throw new ApiError(
+      "INVALID_RESPONSE",
+      response.status === 429
+        ? "Too many requests. Please wait a moment and try again."
+        : "Request failed",
+      response.status,
+    );
+  }
 
   if (!response.ok || json.success === false) {
-    const err = json as ApiErrorBody;
     throw new ApiError(
-      err.error?.code ?? "UNKNOWN_ERROR",
-      err.error?.message ?? "Request failed",
+      json.error?.code ?? "UNKNOWN_ERROR",
+      json.error?.message ??
+        (response.status === 429
+          ? "Too many requests. Please wait a moment and try again."
+          : "Request failed"),
       response.status,
-      err.error?.details,
+      json.error?.details,
     );
   }
 

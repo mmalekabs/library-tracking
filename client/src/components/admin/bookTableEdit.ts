@@ -20,6 +20,7 @@ export type BookTableField =
   | "yearPublished"
   | "isbn"
   | "isbn13"
+  | "goodreadsId"
   | "edition"
   | "currency"
   | "isPubliclyVisible"
@@ -38,6 +39,7 @@ export const BOOK_TABLE_COLUMNS = [
   { key: "numberOfPages", label: "Pages", minWidth: "4rem" },
   { key: "yearPublished", label: "Year", minWidth: "4rem" },
   { key: "isbn", label: "ISBN", minWidth: "7rem" },
+  { key: "goodreadsId", label: "Goodreads Id", minWidth: "6rem" },
   { key: "isPubliclyVisible", label: "Public", minWidth: "4rem" },
   { key: "isGift", label: "Gift?", minWidth: "4rem" },
 ] as const satisfies readonly {
@@ -62,6 +64,7 @@ export const BOOK_TABLE_SORT_BY: Record<BookTableColumnField, BookSortBy> = {
   numberOfPages: "numberOfPages",
   yearPublished: "yearPublished",
   isbn: "isbn",
+  goodreadsId: "externalId",
   isPubliclyVisible: "isPubliclyVisible",
   isGift: "isGift",
 };
@@ -97,6 +100,8 @@ export function getBookFieldDisplay(book: Book, field: BookTableField): string {
       return book.isbn ?? "";
     case "isbn13":
       return book.isbn13 ?? "";
+    case "goodreadsId":
+      return book.externalId ?? "";
     case "edition":
       return book.edition ?? "";
     case "currency":
@@ -193,6 +198,8 @@ export function buildBookFieldPayload(
       return { isbn: trimmed || null };
     case "isbn13":
       return { isbn13: trimmed || null };
+    case "goodreadsId":
+      return { externalId: trimmed || null };
     case "edition":
       return { edition: trimmed || null };
     case "currency":

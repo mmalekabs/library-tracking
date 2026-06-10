@@ -105,15 +105,16 @@ Login at `/admin/login`. After login:
 | **Authors** | **My library** / **To purchase** tabs; sortable columns; click name/count → books modal; **merge** duplicates; sticky toolbar |
 | **Publishers** | Same as authors (including merge) |
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
+| **From Bookmory** | Upload Bookmory Excel/CSV/JSON export → preview → merge |
 | **From Goodreads** | Enter Book Id or URL → fetch metadata → add to library or wishlist (alternative to manual add / CSV) |
-| **Missing covers** | List books without cover images; bulk or single fetch from Goodreads |
+| **Missing info** | Books missing cover, ISBN-13, and/or market price; bulk fetch from Goodreads and عصير الكتب with live progress |
 | **Reading** | *( **`reading-tracking` branch only** )* Sessions, history, re-reads, period stats; books not in library; Goodreads import |
 | **Settings** | Change admin password |
 
 **Books / To Purchase UI:**
 
 - **Grid view** (default): cards with visibility / delete / **Add to library** (wishlist only)
-- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); click a cell to edit; click outside the table → confirmation modal if changed
+- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); includes **Goodreads Id**; click a cell to edit; click outside the table → confirmation modal if changed
 - **Gift?** column — mark books received as gifts (also on book form under Pricing)
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
 
@@ -148,11 +149,19 @@ Login at `/admin/login`. After login:
 - **Log session** — date, pages read, minutes, optional note; **current page** = sum of **pages read** across all sessions (capped at book length)
 - **Sessions** — view, **edit**, or **delete** any logged session (Reading now + History)
 
-**Covers from Goodreads:**
+**Missing info & Goodreads metadata:**
 
 - On the book form, set **Goodreads Book Id** (`externalId`, same as CSV “Book Id”) and use **Fetch cover**
-- On **Missing covers**, fetch one row or **Fetch all with Goodreads Id** — live timer and progress counts update without reloading the page
+- **Missing info** (`/admin/missing-info`) lists books missing **cover**, **ISBN-13** (empty or invalid), and/or **market price**
+  - **Fetch cover** / **Fetch ISBN-13** from Goodreads when Book Id is set
+  - **Fetch price** from عصير الكتب by ISBN-13 (site list price × 0.9)
+  - Bulk runs on the server with **streaming progress** (timer, count, current title)
 - **Add from Goodreads** uses the same scraper stack but returns full metadata, not only the cover
+
+**Import from Bookmory:**
+
+- Map **`goodreadsID`** column → Goodreads Book Id
+- Duplicate mode **Match existing — update Goodreads Id only** writes `externalId` only (no other fields or reading history)
 
 **Dashboard pricing KPIs:**
 
@@ -216,7 +225,7 @@ The project was built incrementally:
 | 8 | To Purchase collection + public wishlist |
 | 9 | Admin table view + inline edit + pagination |
 | 10 | GitHub-ready secrets handling (`SECURITY.md`, `.gitignore`) |
-| 11 | Goodreads cover fetch (form + Missing covers page with live progress) |
+| 11 | Goodreads cover fetch (form + Missing info page with streaming bulk progress) |
 | 12 | Merge authors/publishers; optional wishlist author; add-to-library modal; sticky entity toolbar |
 | 13 | Books table: server-side sortable columns + client column reorder (Columns modal) |
 | 14 | Authors/Publishers: collection tabs, sortable columns, clickable book lists |
@@ -224,6 +233,8 @@ The project was built incrementally:
 | 16 | Add from Goodreads page (full metadata fetch by Id/URL) |
 | 17 | Reading tracker (sessions, history, re-reads, stats) — **`reading-tracking` branch** |
 | 18 | Reading-only books (`readingOnly`), Goodreads add-to-read, session edit/delete, auto current page — **`reading-tracking` branch** |
+| 19 | Import from Bookmory (preview before merge; goodreadsID column; Goodreads Id-only update mode) |
+| 20 | Missing info (ISBN-13 + عصير الكتب market price); Goodreads Id books table column; admin rate-limit fix |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 

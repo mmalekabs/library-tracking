@@ -1,21 +1,25 @@
 import { Router } from "express";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { sendPaginated, sendSuccess } from "../../utils/response.js";
+import { streamNdjsonResponse } from "../../utils/streamNdjson.js";
 import * as bookService from "../../services/bookService.js";
+import type { BulkFetchProgressUpdate } from "../../services/bookService.js";
 import {
   bookListQuerySchema,
   bulkDeleteSchema,
   bulkFetchCoversSchema,
+  bulkFetchIsbnSchema,
+  bulkFetchMarketPriceSchema,
   bulkVisibilitySchema,
   createBookSchema,
-  missingCoversQuerySchema,
+  missingInfoQuerySchema,
   updateBookSchema,
   visibilitySchema,
   type BookListQuery,
-  missingCoversSummaryQuerySchema,
+  missingInfoSummaryQuerySchema,
   moveToLibrarySchema,
-  type MissingCoversQuery,
-  type MissingCoversSummaryQuery,
+  type MissingInfoQuery,
+  type MissingInfoSummaryQuery,
 } from "../../validators/book.js";
 import { validateBody } from "../../validators/validate.js";
 import { validateQuery } from "../../validators/query.js";
@@ -66,24 +70,24 @@ router.delete(
 );
 
 router.get(
-  "/missing-covers/summary",
-  validateQuery(missingCoversSummaryQuerySchema),
+  "/missing-info/summary",
+  validateQuery(missingInfoSummaryQuerySchema),
   asyncHandler(async (req, res) => {
     const { collection } = (
-      req as typeof req & { validatedQuery: MissingCoversSummaryQuery }
+      req as typeof req & { validatedQuery: MissingInfoSummaryQuery }
     ).validatedQuery;
-    const summary = await bookService.getMissingCoversSummary(collection);
+    const summary = await bookService.getMissingInfoSummary(collection);
     sendSuccess(res, summary);
   }),
 );
 
 router.get(
-  "/missing-covers",
-  validateQuery(missingCoversQuerySchema),
+  "/missing-info",
+  validateQuery(missingInfoQuerySchema),
   asyncHandler(async (req, res) => {
-    const query = (req as typeof req & { validatedQuery: MissingCoversQuery })
+    const query = (req as typeof req & { validatedQuery: MissingInfoQuery })
       .validatedQuery;
-    const { books, pagination } = await bookService.listBooksMissingCovers(query);
+    const { books, pagination } = await bookService.listBooksMissingInfo(query);
     sendPaginated(res, books, pagination);
   }),
 );
@@ -92,8 +96,29 @@ router.post(
   "/bulk-fetch-covers",
   validateBody(bulkFetchCoversSchema),
   asyncHandler(async (req, res) => {
-    const report = await bookService.bulkFetchGoodreadsCovers(req.body);
-    sendSuccess(res, report);
+    streamNdjsonResponse<unknown, BulkFetchProgressUpdate>(res, (onProgress) =>
+      bookService.bulkFetchGoodreadsCovers(req.body, onProgress),
+    );
+  }),
+);
+
+router.post(
+  "/bulk-fetch-isbn",
+  validateBody(bulkFetchIsbnSchema),
+  asyncHandler(async (req, res) => {
+    streamNdjsonResponse<unknown, BulkFetchProgressUpdate>(res, (onProgress) =>
+      bookService.bulkFetchIsbn13FromGoodreads(req.body, onProgress),
+    );
+  }),
+);
+
+router.post(
+  "/bulk-fetch-market-price",
+  validateBody(bulkFetchMarketPriceSchema),
+  asyncHandler(async (req, res) => {
+    streamNdjsonResponse<unknown, BulkFetchProgressUpdate>(res, (onProgress) =>
+      bookService.bulkFetchMarketPriceFromAseeralkotb(req.body, onProgress),
+    );
   }),
 );
 

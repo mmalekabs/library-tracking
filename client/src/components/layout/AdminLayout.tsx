@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ReadingTimerBar } from "@/components/reading/ReadingTimerBar";
 import {
   BookOpen,
   Book,
@@ -15,6 +16,8 @@ import {
   ImageOff,
   BookMarked,
   BookPlus,
+  FileSpreadsheet,
+  History,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -26,8 +29,10 @@ const navItems = [
   { to: "/admin/authors", label: "Authors", icon: Users, end: false },
   { to: "/admin/publishers", label: "Publishers", icon: Building2, end: false },
   { to: "/admin/import", label: "Import", icon: Upload, end: false },
+  { to: "/admin/import/bookmory", label: "From Bookmory", icon: FileSpreadsheet, end: false },
+  { to: "/admin/recent-additions", label: "Recent additions", icon: History, end: false },
   { to: "/admin/from-goodreads", label: "From Goodreads", icon: BookPlus, end: false },
-  { to: "/admin/missing-covers", label: "Missing covers", icon: ImageOff, end: false },
+  { to: "/admin/missing-info", label: "Missing info", icon: ImageOff, end: false },
   { to: "/admin/settings", label: "Settings", icon: Settings, end: false },
 ];
 
@@ -40,8 +45,11 @@ const pageTitles: Record<string, string> = {
   "/admin/authors": "Authors",
   "/admin/publishers": "Publishers",
   "/admin/import": "Import CSV",
+  "/admin/import/bookmory": "Import from Bookmory",
+  "/admin/recent-additions": "Recent additions",
   "/admin/from-goodreads": "Add from Goodreads",
-  "/admin/missing-covers": "Missing covers",
+  "/admin/missing-info": "Missing info",
+  "/admin/missing-covers": "Missing info",
   "/admin/settings": "Settings",
 };
 
@@ -101,6 +109,7 @@ function SidebarNav({
 export function AdminLayout() {
   const { admin } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const basePath =
@@ -180,10 +189,15 @@ export function AdminLayout() {
             </span>
           )}
         </header>
-        <main className="flex-1 p-4 md:p-8">
+        <main className="flex-1 p-4 pb-24 md:p-8 md:pb-24">
           <Outlet />
         </main>
       </div>
+      <ReadingTimerBar
+        onStopAndLog={() => {
+          navigate("/admin/reading");
+        }}
+      />
     </div>
   );
 }

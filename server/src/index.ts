@@ -10,7 +10,7 @@ import publishersRouter from "./routes/publishers.js";
 import bookshelvesRouter from "./routes/bookshelves.js";
 import adminRouter from "./routes/admin/index.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { apiRateLimiter } from "./middleware/rateLimiter.js";
+import { publicApiRateLimiter } from "./middleware/rateLimiter.js";
 
 if (!process.env.JWT_SECRET) {
   console.error("JWT_SECRET environment variable is required");
@@ -28,19 +28,21 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "10mb" }));
-app.use("/api", apiRateLimiter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/admin", adminRouter);
+
+app.use("/api", publicApiRateLimiter);
+
 app.use("/api/books", booksRouter);
 app.use("/api/to-purchase", toPurchaseRouter);
 app.use("/api/authors", authorsRouter);
 app.use("/api/publishers", publishersRouter);
 app.use("/api/bookshelves", bookshelvesRouter);
-app.use("/api/admin", adminRouter);
 
 app.use(errorHandler);
 

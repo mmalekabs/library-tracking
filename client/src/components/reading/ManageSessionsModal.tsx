@@ -63,7 +63,7 @@ export function ManageSessionsModal({
     }) =>
       updateReadingSession(sessionId, {
         sessionDate: data.sessionDate,
-        pagesRead: data.pagesRead,
+        endPage: data.endPage,
         minutesRead: data.minutesRead,
         note: data.note || null,
       }),
@@ -127,7 +127,12 @@ export function ManageSessionsModal({
                       {formatDate(session.sessionDate)}
                     </p>
                     <p className="text-gray-600">
-                      {session.pagesRead} pages
+                      {session.endPage != null
+                        ? `Page ${session.endPage}`
+                        : `${session.pagesRead} pages`}
+                      {session.pagesRead > 0 && session.endPage != null
+                        ? ` (+${session.pagesRead})`
+                        : ""}
                       {session.minutesRead != null &&
                         ` · ${formatMinutes(session.minutesRead)}`}
                     </p>

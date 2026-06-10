@@ -129,15 +129,25 @@ export const updateReadingEntrySchema = z.object({
   review: z.string().max(10000).optional().nullable(),
 });
 
-export const createReadingSessionSchema = z.object({
-  sessionDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
-  pagesRead: z.coerce.number().int().min(0).default(0),
-  minutesRead: z.coerce.number().int().min(0).optional().nullable(),
-  endPage: z.coerce.number().int().min(0).optional().nullable(),
-  note: z.string().max(2000).optional().nullable(),
-});
+export const createReadingSessionSchema = z
+  .object({
+    sessionDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+    endPage: z.coerce.number().int().min(0).optional(),
+    pagesRead: z.coerce.number().int().min(0).optional(),
+    minutesRead: z.coerce.number().int().min(0).optional().nullable(),
+    note: z.string().max(2000).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.endPage == null && data.pagesRead == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Last page read is required",
+        path: ["endPage"],
+      });
+    }
+  });
 
 export const updateReadingSessionSchema = z.object({
   sessionDate: z

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError } from "@/lib/api";
 import {
   clearAuthToken,
   getAuthToken,
@@ -35,21 +36,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const {
     data: admin,
     isLoading,
-    isError,
+    error,
   } = useQuery({
     queryKey: ["auth", "me", token],
     queryFn: getMe,
     enabled: !!token,
-    retry: false,
+    retry: (failureCount, err) => {
+      if (err instanceof ApiError && err.status === 401) return false;
+      return failureCount < 2;
+    },
   });
 
   useEffect(() => {
-    if (isError && token) {
+    if (!token) return;
+    if (error instanceof ApiError && error.status === 401) {
       clearAuthToken();
       setToken(null);
       queryClient.removeQueries({ queryKey: ["auth"] });
     }
-  }, [isError, token, queryClient]);
+  }, [error, token, queryClient]);
 
   const login = useCallback(
     async (username: string, password: string) => {

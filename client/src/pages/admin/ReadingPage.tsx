@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,6 +30,7 @@ import {
   fetchReadingHistory,
   fetchReadingStats,
   createReadingOnlyBook,
+  fetchReadingEntry,
   fetchReadingSummary,
   formatMinutes,
   logReadingSession,
@@ -43,6 +44,11 @@ import { TablePagination } from "@/components/admin/TablePagination";
 import { DEFAULT_PAGE_SIZE, type PageSize } from "@/constants/pagination";
 import { STATUS_LABELS } from "@/constants/stats";
 import { SessionFormModal } from "@/components/reading/SessionFormModal";
+import {
+  consumePendingSessionLog,
+  getActiveTimer,
+  startTimer,
+} from "@/lib/readingTimer";
 import { ManageSessionsModal } from "@/components/reading/ManageSessionsModal";
 import { FinishReadingModal } from "@/components/reading/FinishReadingModal";
 import { StartReadingModal } from "@/components/reading/StartReadingModal";
@@ -72,19 +78,24 @@ function ProgressBar({ percent }: { percent: number | null }) {
 
 function EntryCard({
   entry,
+  timerEntryId,
   onLog,
+  onStartTimer,
   onManageSessions,
   onFinish,
   onPause,
   onResume,
 }: {
   entry: ReadingEntry;
+  timerEntryId: string | null;
   onLog: () => void;
+  onStartTimer: () => void;
   onManageSessions: () => void;
   onFinish: () => void;
   onPause: () => void;
   onResume: () => void;
 }) {
+  const timerRunning = timerEntryId === entry.id;
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex gap-4">
@@ -150,6 +161,21 @@ function EntryCard({
           <FileText className="h-3.5 w-3.5" />
           Log session
         </button>
+        {!timerRunning ? (
+          <button
+            type="button"
+            onClick={onStartTimer}
+            className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Start timer
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+            <Clock className="h-3.5 w-3.5 animate-pulse" />
+            Timer running
+          </span>
+        )}
         {entry.sessionCount > 0 && (
           <button
             type="button"
@@ -192,7 +218,8 @@ function EntryCard({
           <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
             {entry.recentSessions.map((s) => (
               <li key={s.id}>
-                {formatDate(s.sessionDate)} — {s.pagesRead} pages
+                {formatDate(s.sessionDate)}
+                {s.endPage != null ? ` — page ${s.endPage}` : ` — ${s.pagesRead} pages`}
                 {s.minutesRead ? `, ${formatMinutes(s.minutesRead)}` : ""}
               </li>
             ))}
@@ -212,6 +239,12 @@ export function ReadingPage() {
     "day" | "week" | "month" | "year"
   >("month");
   const [logEntry, setLogEntry] = useState<ReadingEntry | null>(null);
+  const [logInitialMinutes, setLogInitialMinutes] = useState<number | null>(
+    null,
+  );
+  const [timerEntryId, setTimerEntryId] = useState<string | null>(
+    () => getActiveTimer()?.entryId ?? null,
+  );
   const [sessionsEntry, setSessionsEntry] = useState<ReadingEntry | null>(null);
   const [finishEntry, setFinishEntry] = useState<ReadingEntry | null>(null);
   const [startOpen, setStartOpen] = useState(false);
@@ -304,10 +337,60 @@ export function ReadingPage() {
     onSuccess: () => {
       toast.success("Session logged");
       setLogEntry(null);
+      setLogInitialMinutes(null);
       invalidate();
     },
     onError: mutationError,
   });
+
+  const openLogModal = useCallback(
+    (entry: ReadingEntry, minutes?: number | null) => {
+      setLogEntry(entry);
+      setLogInitialMinutes(minutes ?? null);
+      setTab("now");
+    },
+    [],
+  );
+
+  const resolveAndOpenLog = useCallback(
+    (entryId: string, minutes?: number | null) => {
+      const found = current.find((e) => e.id === entryId);
+      if (found) {
+        openLogModal(found, minutes);
+        return;
+      }
+      void fetchReadingEntry(entryId).then((detail) => {
+        openLogModal(detail, minutes);
+      });
+    },
+    [current, openLogModal],
+  );
+
+  useEffect(() => {
+    const sync = () => setTimerEntryId(getActiveTimer()?.entryId ?? null);
+    sync();
+    window.addEventListener("reading-timer-changed", sync);
+    return () => window.removeEventListener("reading-timer-changed", sync);
+  }, []);
+
+  useEffect(() => {
+    const pending = consumePendingSessionLog();
+    if (pending) {
+      resolveAndOpenLog(pending.entryId, pending.minutes);
+    }
+  }, [resolveAndOpenLog]);
+
+  useEffect(() => {
+    const onStop = (e: Event) => {
+      const detail = (e as CustomEvent<{ entryId: string; minutes: number }>)
+        .detail;
+      if (detail?.entryId) {
+        resolveAndOpenLog(detail.entryId, detail.minutes);
+      }
+    };
+    window.addEventListener("reading-timer-stop", onStop);
+    return () => window.removeEventListener("reading-timer-stop", onStop);
+  }, [resolveAndOpenLog]);
 
   const activeBookIds = new Set(current.map((e) => e.bookId));
 
@@ -413,7 +496,12 @@ export function ReadingPage() {
             <EntryCard
               key={entry.id}
               entry={entry}
-              onLog={() => setLogEntry(entry)}
+              timerEntryId={timerEntryId}
+              onLog={() => openLogModal(entry)}
+              onStartTimer={() => {
+                startTimer(entry.id, entry.book.title);
+                setTimerEntryId(entry.id);
+              }}
               onManageSessions={() => setSessionsEntry(entry)}
               onFinish={() => setFinishEntry(entry)}
               onPause={() =>
@@ -668,10 +756,22 @@ export function ReadingPage() {
         entry={logEntry}
         open={logEntry !== null}
         saving={sessionMutation.isPending}
-        onClose={() => setLogEntry(null)}
+        initialMinutes={logInitialMinutes}
+        onClose={() => {
+          setLogEntry(null);
+          setLogInitialMinutes(null);
+        }}
         onSubmit={(data) => {
           if (!logEntry) return;
-          sessionMutation.mutate({ entryId: logEntry.id, data });
+          sessionMutation.mutate({
+            entryId: logEntry.id,
+            data: {
+              sessionDate: data.sessionDate,
+              endPage: data.endPage,
+              minutesRead: data.minutesRead,
+              note: data.note || null,
+            },
+          });
         }}
       />
 
