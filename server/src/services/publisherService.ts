@@ -1,5 +1,9 @@
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../middleware/errorHandler.js";
+import {
+  findPublisherIdsByArabicSearch,
+  idsWhere,
+} from "../utils/arabicSearch.js";
 import type { EntityListQuery } from "../validators/entity.js";
 import {
   collectionToPurchase,
@@ -8,10 +12,13 @@ import {
 
 export async function listPublishersAdmin(query: EntityListQuery) {
   const toPurchase = collectionToPurchase(query.collection);
+  let searchWhere: { id: { in: string[] } } | undefined;
+  if (query.search?.trim()) {
+    const ids = await findPublisherIdsByArabicSearch(query.search.trim());
+    searchWhere = idsWhere(ids);
+  }
   const publishers = await prisma.publisher.findMany({
-    where: query.search?.trim()
-      ? { name: { contains: query.search.trim(), mode: "insensitive" } }
-      : undefined,
+    where: searchWhere,
     select: {
       id: true,
       name: true,

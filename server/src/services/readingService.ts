@@ -1,6 +1,10 @@
 import type { Prisma, ReadingStatus } from "@prisma/client";
 import { AppError } from "../middleware/errorHandler.js";
 import { prisma } from "../lib/prisma.js";
+import {
+  findBookIdsByArabicSearch,
+  restrictToSearchIds,
+} from "../utils/arabicSearch.js";
 import type {
   CreateReadingEntryInput,
   CreateReadingOnlyBookInput,
@@ -370,14 +374,11 @@ function normalizeCoverUrl(url?: string | null): string | null {
 }
 
 export async function listReadableBooks(query: ReadableBooksQuery) {
-  const where: Prisma.BookWhereInput = { toPurchase: false };
+  let where: Prisma.BookWhereInput = { toPurchase: false };
 
   if (query.search?.trim()) {
-    const term = query.search.trim();
-    where.OR = [
-      { title: { contains: term, mode: "insensitive" } },
-      { author: { name: { contains: term, mode: "insensitive" } } },
-    ];
+    const ids = await findBookIdsByArabicSearch(query.search.trim());
+    where = restrictToSearchIds(where, ids);
   }
 
   const books = await prisma.book.findMany({

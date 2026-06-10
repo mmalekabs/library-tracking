@@ -162,6 +162,8 @@ See `LIBRARY_APP_SPEC.pdf` for the full specification.
 
 ### Admin highlights
 
+- **Grouped sidebar** — collapsible sections (Main, Library, Catalog, Import, Tools, Settings); active section opens automatically
+- **Arabic-insensitive search** — catalog and admin search ignore tashkeel and hamza variants (e.g. `رجلا` matches `رجلاً`)
 - **Books** and **To Purchase** default to **grid view** (switch to **table** for inline editing, **sortable headers**, and **Columns** to reorder fields)
 - **Add from Goodreads** (`/admin/from-goodreads`) — enter Book Id or URL; preview metadata; add to library or wishlist (description not saved to notes)
 - **Missing info** (`/admin/missing-info`) — books missing cover, ISBN-13, and/or market price; fetch cover and ISBN-13 from Goodreads, market price from [عصير الكتب](https://www.aseeralkotb.com/) (10% discount); server bulk with live progress

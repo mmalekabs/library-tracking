@@ -83,7 +83,7 @@ Hidden books still appear in admin; they are not shown to visitors.
 
 | URL | Content |
 |-----|---------|
-| `/` | Searchable grid of public **library** books |
+| `/` | Searchable grid of public **library** books (Arabic search ignores tashkeel and hamza variants) |
 | `/books/:id` | One public library book |
 | `/to-purchase` | Searchable grid of public **wishlist** books |
 | `/to-purchase/:id` | One public wishlist book |
@@ -95,7 +95,18 @@ Header links: **Catalog**, **To Purchase**, **Admin**.
 
 ## Admin area (your dashboard)
 
-Login at `/admin/login`. After login:
+Login at `/admin/login`. The sidebar uses **collapsible groups** (active group opens automatically):
+
+| Group | Pages |
+|-------|--------|
+| **Main** | Dashboard |
+| **Library** | Books, Reading, Add to read, To Purchase |
+| **Catalog** | Authors, Publishers |
+| **Import** | CSV import, From Bookmory, From Goodreads, Recent additions |
+| **Tools** | Missing info |
+| **Settings** | Change admin password |
+
+**Search** (public catalog, admin books, authors, publishers, reading picker, missing info) is **Arabic-insensitive**: tashkeel and hamza/alef variants are ignored so `رجلا` matches `رجلاً`.
 
 | Section | Purpose |
 |---------|---------|
@@ -109,7 +120,6 @@ Login at `/admin/login`. After login:
 | **From Goodreads** | Enter Book Id or URL → fetch metadata → add to library or wishlist (alternative to manual add / CSV) |
 | **Missing info** | Books missing cover, ISBN-13, and/or market price; bulk fetch from Goodreads and عصير الكتب with live progress |
 | **Reading** | *( **`reading-tracking` branch only** )* Sessions, history, re-reads, period stats; books not in library; Goodreads import |
-| **Settings** | Change admin password |
 
 **Books / To Purchase UI:**
 
@@ -235,6 +245,7 @@ The project was built incrementally:
 | 18 | Reading-only books (`readingOnly`), Goodreads add-to-read, session edit/delete, auto current page — **`reading-tracking` branch** |
 | 19 | Import from Bookmory (preview before merge; goodreadsID column; Goodreads Id-only update mode) |
 | 20 | Missing info (ISBN-13 + عصير الكتب market price); Goodreads Id books table column; admin rate-limit fix |
+| 21 | Arabic-insensitive search; grouped collapsible admin sidebar |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 

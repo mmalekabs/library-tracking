@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import { arabicSearchEquals } from "@/utils/arabicSearch";
 import { inputClass } from "./FormSection";
 
 interface Tag {
@@ -107,7 +108,7 @@ export function TagPicker({
                 </li>
               ))}
             {!options.some(
-              (o) => o.name.toLowerCase() === search.trim().toLowerCase(),
+              (o) => arabicSearchEquals(o.name, search.trim()),
             ) && (
               <li>
                 <button

@@ -2,6 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { calculateSavings, decimalToNumber } from "../utils/book.js";
+import {
+  findBookIdsByArabicSearch,
+  restrictToSearchIds,
+} from "../utils/arabicSearch.js";
 import { isValidIsbn13, needsIsbn13 } from "../utils/isbn.js";
 import type { EntityBooksQuery } from "../validators/entity.js";
 import type {
@@ -133,16 +137,6 @@ function buildWhereClause(
   if (query.publisherId) where.publisherId = query.publisherId;
   if (query.bookshelfId) {
     where.bookshelves = { some: { bookshelfId: query.bookshelfId } };
-  }
-
-  if (query.search?.trim()) {
-    const term = query.search.trim();
-    where.OR = [
-      { title: { contains: term, mode: "insensitive" } },
-      { isbn: { contains: term, mode: "insensitive" } },
-      { isbn13: { contains: term, mode: "insensitive" } },
-      { author: { name: { contains: term, mode: "insensitive" } } },
-    ];
   }
 
   if (query.minPrice !== undefined || query.maxPrice !== undefined) {
@@ -359,6 +353,15 @@ function bookDataFromInput(
   };
 }
 
+async function applyBookSearchFilter(
+  where: Prisma.BookWhereInput,
+  search?: string,
+): Promise<Prisma.BookWhereInput> {
+  if (!search?.trim()) return where;
+  const ids = await findBookIdsByArabicSearch(search.trim());
+  return restrictToSearchIds(where, ids);
+}
+
 export async function listBooks(
   query: BookListQuery,
   options: {
@@ -368,7 +371,10 @@ export async function listBooks(
     includeAdminFields?: boolean;
   },
 ) {
-  const where = buildWhereClause(query, options);
+  const where = await applyBookSearchFilter(
+    buildWhereClause(query, options),
+    query.search,
+  );
   const skip = (query.page - 1) * query.limit;
 
   const [books, totalItems] = await Promise.all([
@@ -788,17 +794,8 @@ async function buildMissingInfoWhere(
   };
 
   if (query.search?.trim()) {
-    const term = query.search.trim();
-    where.AND = [
-      {
-        OR: [
-          { title: { contains: term, mode: "insensitive" } },
-          { externalId: { contains: term, mode: "insensitive" } },
-          { isbn13: { contains: term, mode: "insensitive" } },
-          { author: { name: { contains: term, mode: "insensitive" } } },
-        ],
-      },
-    ];
+    const ids = await findBookIdsByArabicSearch(query.search.trim());
+    return restrictToSearchIds(where, ids);
   }
 
   return where;

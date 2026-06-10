@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { arabicSearchEquals } from "@/utils/arabicSearch";
 import { inputClass } from "./FormSection";
 
 interface EntityPickerProps {
@@ -78,7 +79,8 @@ export function EntityPicker({
           ))}
           {search.trim() &&
             !options.some(
-              (o) => o.name.toLowerCase() === search.trim().toLowerCase(),
+              (o) =>
+                arabicSearchEquals(o.name, search.trim()),
             ) && (
               <li>
                 <button

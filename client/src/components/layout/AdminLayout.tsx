@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ReadingTimerBar } from "@/components/reading/ReadingTimerBar";
 import {
@@ -18,22 +18,88 @@ import {
   BookPlus,
   FileSpreadsheet,
   History,
+  ChevronDown,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-const navItems = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/books", label: "Books", icon: Book, end: false },
-  { to: "/admin/reading", label: "Reading", icon: BookMarked, end: false },
-  { to: "/admin/to-purchase", label: "To Purchase", icon: ShoppingCart, end: false },
-  { to: "/admin/authors", label: "Authors", icon: Users, end: false },
-  { to: "/admin/publishers", label: "Publishers", icon: Building2, end: false },
-  { to: "/admin/import", label: "Import", icon: Upload, end: false },
-  { to: "/admin/import/bookmory", label: "From Bookmory", icon: FileSpreadsheet, end: false },
-  { to: "/admin/recent-additions", label: "Recent additions", icon: History, end: false },
-  { to: "/admin/from-goodreads", label: "From Goodreads", icon: BookPlus, end: false },
-  { to: "/admin/missing-info", label: "Missing info", icon: ImageOff, end: false },
-  { to: "/admin/settings", label: "Settings", icon: Settings, end: false },
+type NavItem = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+};
+
+type NavGroup = {
+  id: string;
+  label: string;
+  items: NavItem[];
+};
+
+const navGroups: NavGroup[] = [
+  {
+    id: "main",
+    label: "Main",
+    items: [
+      { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+    ],
+  },
+  {
+    id: "library",
+    label: "Library",
+    items: [
+      { to: "/admin/books", label: "Books", icon: Book },
+      { to: "/admin/reading", label: "Reading", icon: BookMarked, end: true },
+      {
+        to: "/admin/reading/from-goodreads",
+        label: "Add to read",
+        icon: BookPlus,
+      },
+      { to: "/admin/to-purchase", label: "To Purchase", icon: ShoppingCart },
+    ],
+  },
+  {
+    id: "catalog",
+    label: "Catalog",
+    items: [
+      { to: "/admin/authors", label: "Authors", icon: Users },
+      { to: "/admin/publishers", label: "Publishers", icon: Building2 },
+    ],
+  },
+  {
+    id: "import",
+    label: "Import",
+    items: [
+      { to: "/admin/import", label: "CSV import", icon: Upload },
+      {
+        to: "/admin/import/bookmory",
+        label: "From Bookmory",
+        icon: FileSpreadsheet,
+      },
+      {
+        to: "/admin/from-goodreads",
+        label: "From Goodreads",
+        icon: BookPlus,
+      },
+      {
+        to: "/admin/recent-additions",
+        label: "Recent additions",
+        icon: History,
+      },
+    ],
+  },
+  {
+    id: "tools",
+    label: "Tools",
+    items: [
+      { to: "/admin/missing-info", label: "Missing info", icon: ImageOff },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    items: [{ to: "/admin/settings", label: "Settings", icon: Settings }],
+  },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -53,34 +119,92 @@ const pageTitles: Record<string, string> = {
   "/admin/settings": "Settings",
 };
 
+function groupContainsPath(group: NavGroup, pathname: string): boolean {
+  return group.items.some((item) => {
+    if (item.end) return pathname === item.to;
+    return pathname === item.to || pathname.startsWith(`${item.to}/`);
+  });
+}
+
 function SidebarNav({
   onNavigate,
 }: {
   onNavigate?: () => void;
 }) {
   const { logout } = useAuth();
+  const location = useLocation();
+  const activeGroupId = useMemo(
+    () =>
+      navGroups.find((group) => groupContainsPath(group, location.pathname))
+        ?.id ?? null,
+    [location.pathname],
+  );
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!activeGroupId) return;
+    setExpanded((prev) =>
+      prev[activeGroupId] ? prev : { ...prev, [activeGroupId]: true },
+    );
+  }, [activeGroupId]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpanded((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
 
   return (
     <>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-        {navItems.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`
-            }
-          >
-            <Icon className="h-5 w-5 shrink-0" aria-hidden />
-            {label}
-          </NavLink>
-        ))}
+      <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+        {navGroups.map((group) => {
+          const isOpen = expanded[group.id] ?? group.id === activeGroupId;
+          const groupActive = group.id === activeGroupId;
+
+          return (
+            <div key={group.id}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide ${
+                  groupActive
+                    ? "text-primary"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+                aria-expanded={isOpen}
+              >
+                <span>{group.label}</span>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 transition-transform ${
+                    isOpen ? "rotate-0" : "-rotate-90"
+                  }`}
+                  aria-hidden
+                />
+              </button>
+              {isOpen && (
+                <ul className="mt-1 space-y-0.5">
+                  {group.items.map(({ to, label, icon: Icon, end }) => (
+                    <li key={to}>
+                      <NavLink
+                        to={to}
+                        end={end}
+                        onClick={onNavigate}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
+                            isActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          }`
+                        }
+                      >
+                        <Icon className="h-5 w-5 shrink-0" aria-hidden />
+                        {label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </nav>
       <div className="border-t border-gray-200 p-4">
         <Link
