@@ -163,7 +163,7 @@ export function DashboardPage() {
             label="Total savings"
             value={
               overview.totalSavings !== null
-                ? `${overview.totalSavings.toLocaleString()} SAR`
+                ? `${Math.round(overview.totalSavings).toLocaleString()} SAR`
                 : "N/A"
             }
             sub="Where market price is set"

@@ -99,7 +99,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/middleware/errorHandler.ts` | `AppError` + JSON errors |
 | `src/middleware/rateLimiter.ts` | API + auth rate limits |
 | `src/utils/jwt.ts` | Sign / verify JWT |
-| `src/utils/book.ts` | `decimalToNumber`, `calculateSavings` |
+| `src/utils/book.ts` | `decimalToNumber`, `calculateSavings` (rounded integer savings) |
 | `src/utils/arabicSearch.ts` | Arabic-insensitive search helpers |
 | `src/utils/csvParse.ts` | CSV field keys + column auto-map |
 | `src/utils/response.ts` | `sendSuccess`, `sendPaginated` |
@@ -121,7 +121,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/components/layout/PublicLayout.tsx` | Public header/footer |
 | `src/components/layout/AdminLayout.tsx` | Admin sidebar + mobile drawer |
 | `src/components/auth/ProtectedRoute.tsx` | Redirect if not logged in |
-| `src/components/books/BookCard.tsx` | Catalog card |
+| `src/components/books/BookCard.tsx` | Shared catalog/admin grid card (uniform height, fixed cover ratio) |
 | `src/components/admin/*` | Forms, tables, modals, pickers |
 | `src/components/admin/bookTableColumns.ts` | Column order persistence (`localStorage`) |
 | `src/components/admin/bookTableEdit.ts` | Inline table edit field mapping |
@@ -276,7 +276,7 @@ Optional `createdFrom` / `createdTo` (YYYY-MM-DD) filter on `createdAt`.
 | Option | Effect |
 |--------|--------|
 | `includePricing: false` | Omits prices (public) |
-| `includePricing: true` | Includes prices + `savings` |
+| `includePricing: true` | Includes prices + `savings` (integer: `Math.round(purchase − market)`) |
 | `includeAdminFields: true` | Adds `isPubliclyVisible`, `toPurchase`, `notes` |
 
 ---
@@ -460,6 +460,20 @@ Only **`toPurchase`** checkbox + **`isPubliclyVisible`**. No status, dates, or b
 | `EntityManageTable.tsx` | Authors/publishers with merge |
 | `EntityBooksModal.tsx` | Books for one author/publisher |
 
+#### `BookCard.tsx` (public + admin grids)
+
+Shared by `CatalogPage`, `ToPurchaseCatalogPage`, and `AdminBooksList` (grid mode).
+
+| Behavior | Detail |
+|----------|--------|
+| Layout | `h-full` in a CSS grid with `items-stretch`; `min-h` on article; `aspect-[2/3]` cover |
+| Text slots | `line-clamp` on title (2 lines) and author; reserved metadata footer so rows align |
+| Admin extras | Purchase price + rounded savings badge; **Hidden** badge when not public |
+| Savings display | `Math.round(book.savings)` — never shown with decimals |
+| Admin list wrapper | `AdminBooksList` wraps card in `flex-1`; visibility/delete buttons below (`shrink-0`) |
+
+**Edit card layout:** `client/src/components/books/BookCard.tsx` and grid classes on catalog/admin list pages.
+
 ---
 
 ## 10. Page responsibilities
@@ -535,6 +549,7 @@ Only **`toPurchase`** checkbox + **`isPubliclyVisible`**. No status, dates, or b
 | Library vs wishlist pie | `GET /stats/reading` → `breakdown[]` with `key` `library` \| `wishlist` |
 | Books added timeline | `createdAt` grouped by month |
 | Total value | Sum of `marketPrice` |
+| Total savings | Sum of rounded per-book savings (`Math.round` in `statsService.getOverview`) |
 | Recently added list | `createdAt` |
 | Wishlist quick list | `toPurchase: true` |
 
@@ -663,10 +678,13 @@ npx prisma generate
 
 ---
 
-## 26. Gift field and Total value KPI
+## 26. Gift field, savings rounding, and Total value KPI
 
 - `Book.isGift` — form + table
 - `statsService.getOverview().totalValue` — sum of `marketPrice`
+- **Savings** — `server/src/utils/book.ts` → `calculateSavings()` returns `Math.round(purchasePrice − marketPrice)` or `null` if either price is missing
+- **Book form** — live savings preview uses the same rounding (`BookForm.tsx`)
+- **Dashboard** — `totalSavings` KPI displays as a whole number (no fractional SAR)
 
 ---
 

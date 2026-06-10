@@ -92,7 +92,7 @@ export async function getOverview() {
     totalPages,
     totalSpent: Math.round(totalSpent * 100) / 100,
     totalValue: Math.round(totalValue * 100) / 100,
-    totalSavings: totalSavings !== null ? Math.round(totalSavings * 100) / 100 : null,
+    totalSavings: totalSavings !== null ? Math.round(totalSavings) : null,
     averagePrice: averagePrice !== null ? Math.round(averagePrice * 100) / 100 : null,
     medianPrice: medianPrice !== null ? Math.round(medianPrice * 100) / 100 : null,
     totalAuthors: authorCount,

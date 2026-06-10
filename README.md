@@ -145,7 +145,7 @@ You can run the client before Railway is ready — the catalog page will show **
 | **Import** | Goodreads-style CSV, Bookmory Excel/CSV/JSON, Add from Goodreads |
 | **Tools** | Missing info (cover, ISBN-13, market price bulk fetch) |
 | **Dashboard** | KPIs, library vs wishlist chart, spending, formats, timeline (`createdAt`) |
-| **Pricing** | Purchase price, market price, savings, **Gift?** flag, **Total value** KPI |
+| **Pricing** | Purchase price, market price, **rounded integer savings** (purchase − market), **Gift?** flag, **Total value** KPI |
 
 ### Removed (no longer in this app)
 
@@ -160,7 +160,8 @@ See `docs/GENERAL.md` for a full feature tour and `docs/DETAILED.md` for file-le
 
 - **Grouped sidebar** — collapsible sections (Main, Library, Catalog, Import, Tools, Settings)
 - **Arabic-insensitive search** — catalog and admin search ignore tashkeel and hamza variants
-- **Books** and **To Purchase** — grid (default) or table with inline edit, sort, column reorder
+- **Books** and **To Purchase** — grid (default) with **uniform card sizes**, or table with inline edit, sort, column reorder
+- **Public catalog / wishlist** — same `BookCard` grid layout as admin (consistent card height per row)
 - **Add from Goodreads** — fetch metadata by Id or URL; add to library or wishlist
 - **Missing info** — bulk Goodreads cover/ISBN + عصير الكتب market price
 - **Import from Bookmory** — preview before merge; optional Goodreads Id-only duplicate update

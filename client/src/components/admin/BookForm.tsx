@@ -177,7 +177,7 @@ export function BookForm({
     const p = form.purchasePrice ? Number(form.purchasePrice) : null;
     const m = form.marketPrice ? Number(form.marketPrice) : null;
     if (p === null || m === null || Number.isNaN(p) || Number.isNaN(m)) return null;
-    return p - m;
+    return Math.round(p - m);
   }, [form.purchasePrice, form.marketPrice]);
 
   const saveMutation = useMutation({
@@ -468,7 +468,7 @@ export function BookForm({
           >
             {savings === null
               ? "N/A — enter both prices"
-              : `${savings > 0 ? "Overpaid" : savings < 0 ? "Saved" : "Even"}: ${Math.abs(savings).toFixed(2)} ${form.currency}`}
+              : `${savings > 0 ? "Overpaid" : savings < 0 ? "Saved" : "Even"}: ${Math.abs(savings)} ${form.currency}`}
           </p>
         </div>
       </FormSection>

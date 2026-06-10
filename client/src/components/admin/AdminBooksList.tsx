@@ -268,20 +268,22 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
       )}
 
       {!isLoading && books.length > 0 && viewMode === "grid" && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {books.map((book) => (
-            <div key={book.id} className="relative">
+            <div key={book.id} className="relative flex h-full flex-col">
               {collection === "to_purchase" && (
                 <span className="absolute right-2 top-2 z-10 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
                   To purchase
                 </span>
               )}
-              <BookCard
-                book={book}
-                admin
-                detailPath={cfg.editPath(book.id)}
-              />
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex-1">
+                <BookCard
+                  book={book}
+                  admin
+                  detailPath={cfg.editPath(book.id)}
+                />
+              </div>
+              <div className="mt-2 flex shrink-0 flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() =>

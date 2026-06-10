@@ -22,5 +22,5 @@ export function calculateSavings(
       : decimalToNumber(marketPrice as Decimal | null);
 
   if (purchase === null || market === null) return null;
-  return purchase - market;
+  return Math.round(purchase - market);
 }

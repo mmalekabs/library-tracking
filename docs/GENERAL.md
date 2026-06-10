@@ -76,7 +76,7 @@ Hidden books still appear in admin; they are not shown to visitors.
 
 ### Pricing (admin only)
 
-`purchasePrice`, `marketPrice`, and computed **savings** are stored and shown in admin. Public API responses **omit** prices.
+`purchasePrice`, `marketPrice`, and computed **savings** (`purchasePrice − marketPrice`, **rounded to a whole number**) are stored and shown in admin — on the book form, grid cards, and dashboard KPIs. Public API responses **omit** prices.
 
 ### When a book was added
 
@@ -88,9 +88,9 @@ Use **`createdAt`** (record creation timestamp). There is no separate “date ad
 
 | URL | Content |
 |-----|---------|
-| `/` | Searchable grid of public **library** books (Arabic search ignores tashkeel and hamza variants) |
+| `/` | Searchable grid of public **library** books — uniform card sizes (Arabic search ignores tashkeel and hamza variants) |
 | `/books/:id` | One public library book |
-| `/to-purchase` | Searchable grid of public **wishlist** books |
+| `/to-purchase` | Searchable grid of public **wishlist** books (same card layout as catalog) |
 | `/to-purchase/:id` | One public wishlist book |
 | `/admin/login` | Link from header; admin entry |
 
@@ -128,7 +128,7 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 
 **Books / To Purchase UI:**
 
-- **Grid view** (default): cards with visibility / delete / **Add to library** (wishlist only)
+- **Grid view** (default): shared **`BookCard`** component with **uniform height** per row (fixed cover ratio, reserved title/metadata slots); admin action buttons sit below the card. Cards show purchase price and rounded savings on admin grids only.
 - **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); includes **Goodreads Id**; click a cell to edit
 - **Gift?** column — mark books received as gifts (also on book form under Pricing)
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
@@ -159,7 +159,7 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 
 - **Total spent** — sum of purchase prices
 - **Total value** — sum of **market / actual prices**
-- **Total savings** — where both prices exist
+- **Total savings** — sum of per-book savings where both prices exist (rounded to whole SAR)
 - **In library** / **To purchase** — counts from `toPurchase` flag
 
 ---
@@ -242,6 +242,7 @@ Secrets live in **Railway Variables**, not in git. See [SECURITY.md](../SECURITY
 | 18 | Missing info (ISBN-13 + عصير الكتب market price); Goodreads Id books table column |
 | 19 | Arabic-insensitive search; grouped collapsible admin sidebar |
 | 20 | **Simplification** — removed reading tracker, reading status, bookshelves, reading dates; library vs wishlist only |
+| 21 | **Rounded savings** (integer only, no decimals) + **uniform book cards** in public and admin grid views |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 
