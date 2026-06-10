@@ -1,14 +1,12 @@
 import { AUTH_TOKEN_KEY } from "./constants";
-import type { ReadingStatus } from "@/types";
 
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "/api";
 
 export interface BookmoryImportSettings {
   duplicateMode: "skip" | "overwrite" | "update_goodreads_id";
-  importAs: "library" | "to_purchase" | "reading_only";
+  importAs: "library" | "to_purchase";
   isPubliclyVisible: boolean;
-  importReadingEntries: boolean;
   allowMissingAuthor: boolean;
 }
 
@@ -16,11 +14,8 @@ export interface BookmoryPreviewBook {
   sourceRow: number;
   title: string;
   author: string | null;
-  status: ReadingStatus;
   numberOfPages: number | null;
   rating: number | null;
-  dateStarted: string | null;
-  dateFinished: string | null;
   pagesRead: number | null;
   totalReadMinutes: number | null;
   totalReadTimeRaw: string | null;
@@ -58,7 +53,6 @@ export interface BookmoryImportReport {
   updated: number;
   skipped: number;
   failed: number;
-  readingEntriesCreated: number;
   errors: { row: number; message: string }[];
 }
 

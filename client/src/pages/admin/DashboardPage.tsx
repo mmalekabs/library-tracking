@@ -40,18 +40,20 @@ import {
   fetchStatsPublishers,
   fetchStatsFormats,
   fetchStatsTimeline,
-  fetchStatsBookshelves,
   fetchStatsPages,
   fetchStatsLists,
 } from "@/lib/stats";
 import { StatCard, Section, ChartBox } from "@/components/admin/stats/StatCard";
 import {
-  STATUS_COLORS,
-  STATUS_LABELS,
   FORMAT_COLORS,
   FORMAT_LABELS,
   CHART_COLORS,
 } from "@/constants/stats";
+
+const COLLECTION_COLORS: Record<string, string> = {
+  library: "#3B82F6",
+  wishlist: "#F59E0B",
+};
 
 const chartH = 280;
 
@@ -65,7 +67,6 @@ export function DashboardPage() {
       { queryKey: ["stats", "publishers"], queryFn: fetchStatsPublishers },
       { queryKey: ["stats", "formats"], queryFn: fetchStatsFormats },
       { queryKey: ["stats", "timeline"], queryFn: fetchStatsTimeline },
-      { queryKey: ["stats", "bookshelves"], queryFn: fetchStatsBookshelves },
       { queryKey: ["stats", "pages"], queryFn: fetchStatsPages },
       { queryKey: ["stats", "lists"], queryFn: fetchStatsLists },
     ],
@@ -81,9 +82,8 @@ export function DashboardPage() {
   const publishers = results[4].data;
   const formats = results[5].data;
   const timeline = results[6].data;
-  const bookshelves = results[7].data;
-  const pages = results[8].data;
-  const lists = results[9].data;
+  const pages = results[7].data;
+  const lists = results[8].data;
 
   if (isLoading) {
     return <p className="text-gray-500">Loading statistics…</p>;
@@ -97,11 +97,11 @@ export function DashboardPage() {
     );
   }
 
-  const statusChartData =
+  const collectionChartData =
     reading?.breakdown.map((s) => ({
-      name: STATUS_LABELS[s.status] ?? s.status,
+      name: s.label,
       value: s.count,
-      fill: STATUS_COLORS[s.status] ?? "#6B7280",
+      fill: COLLECTION_COLORS[s.key] ?? "#6B7280",
     })) ?? [];
 
   const formatChartData =
@@ -189,7 +189,8 @@ export function DashboardPage() {
             value={overview.totalPublishers}
             icon={Building2}
           />
-          <StatCard label="Books read" value={overview.booksRead} icon={CheckCircle} />
+          <StatCard label="In library" value={overview.libraryBooks} icon={CheckCircle} />
+          <StatCard label="To purchase" value={overview.wishlistBooks} icon={BookOpen} />
           <StatCard label="Public books" value={overview.publicBooks} icon={Eye} />
           <StatCard label="Hidden books" value={overview.hiddenBooks} icon={EyeOff} />
         </div>
@@ -197,11 +198,11 @@ export function DashboardPage() {
 
       {/* Reading + Format */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <ChartBox title="Reading status">
+        <ChartBox title="Library vs wishlist">
           <ResponsiveContainer width="100%" height={chartH}>
             <PieChart>
               <Pie
-                data={statusChartData}
+                data={collectionChartData}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
@@ -212,7 +213,7 @@ export function DashboardPage() {
                   `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                 }
               >
-                {statusChartData.map((entry, i) => (
+                {collectionChartData.map((entry, i) => (
                   <Cell key={i} fill={entry.fill} />
                 ))}
               </Pie>
@@ -221,12 +222,12 @@ export function DashboardPage() {
           </ResponsiveContainer>
           <ul className="mt-2 flex flex-wrap gap-3 text-xs">
             {reading?.breakdown.map((s) => (
-              <li key={s.status} className="flex items-center gap-1">
+              <li key={s.key} className="flex items-center gap-1">
                 <span
                   className="inline-block h-2 w-2 rounded-full"
-                  style={{ background: STATUS_COLORS[s.status] }}
+                  style={{ background: COLLECTION_COLORS[s.key] }}
                 />
-                {STATUS_LABELS[s.status]}: {s.count}
+                {s.label}: {s.count}
               </li>
             ))}
           </ul>
@@ -606,46 +607,6 @@ export function DashboardPage() {
         </Section>
       )}
 
-      {/* Bookshelves */}
-      {bookshelves && bookshelves.length > 0 && (
-        <Section title="Bookshelves">
-          <ChartBox title="Books per bookshelf">
-            <ResponsiveContainer width="100%" height={Math.min(400, bookshelves.length * 28)}>
-              <BarChart
-                data={bookshelves.slice(0, 20)}
-                layout="vertical"
-                margin={{ left: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={140}
-                  tick={{ fontSize: 10 }}
-                />
-                <Tooltip />
-                <Bar dataKey="bookCount" fill="#8B5CF6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartBox>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {bookshelves.slice(0, 30).map((s) => (
-              <span
-                key={s.id}
-                className="rounded-full bg-gray-100 px-3 py-1 text-sm"
-                style={{
-                  fontSize: `${Math.min(16, 10 + s.bookCount / 3)}px`,
-                }}
-                dir="auto"
-              >
-                {s.name} ({s.bookCount})
-              </span>
-            ))}
-          </div>
-        </Section>
-      )}
-
       {/* Quick lists */}
       {lists && (
         <Section title="Quick lists">
@@ -662,21 +623,21 @@ export function DashboardPage() {
                       {b.title}
                     </Link>
                     <span className="shrink-0 text-gray-500">
-                      {new Date(b.dateAdded).toLocaleDateString()}
+                      {new Date(b.createdAt).toLocaleDateString()}
                     </span>
                   </li>
                 ))}
               </ul>
             </ChartBox>
-            <ChartBox title={`Currently reading (${lists.currentlyReading.length})`}>
-              {lists.currentlyReading.length === 0 ? (
-                <p className="text-sm text-gray-500">No books in progress.</p>
+            <ChartBox title={`To purchase (${lists.wishlist.length})`}>
+              {lists.wishlist.length === 0 ? (
+                <p className="text-sm text-gray-500">Wishlist is empty.</p>
               ) : (
                 <ul className="space-y-2 text-sm">
-                  {lists.currentlyReading.map((b) => (
+                  {lists.wishlist.map((b) => (
                     <li key={b.id}>
                       <Link
-                        to={`/admin/books/${b.id}/edit`}
+                        to={`/admin/to-purchase/${b.id}/edit`}
                         className="text-primary hover:underline"
                         dir="auto"
                       >

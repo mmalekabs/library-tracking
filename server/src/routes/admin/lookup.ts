@@ -23,13 +23,4 @@ router.get(
   }),
 );
 
-router.get(
-  "/bookshelves",
-  asyncHandler(async (req, res) => {
-    const search = typeof req.query.search === "string" ? req.query.search : undefined;
-    const bookshelves = await lookupService.listBookshelves(search);
-    sendSuccess(res, bookshelves);
-  }),
-);
-
 export default router;

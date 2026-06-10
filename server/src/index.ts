@@ -7,7 +7,6 @@ import booksRouter from "./routes/books.js";
 import toPurchaseRouter from "./routes/toPurchase.js";
 import authorsRouter from "./routes/authors.js";
 import publishersRouter from "./routes/publishers.js";
-import bookshelvesRouter from "./routes/bookshelves.js";
 import adminRouter from "./routes/admin/index.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { publicApiRateLimiter } from "./middleware/rateLimiter.js";
@@ -42,8 +41,6 @@ app.use("/api/books", booksRouter);
 app.use("/api/to-purchase", toPurchaseRouter);
 app.use("/api/authors", authorsRouter);
 app.use("/api/publishers", publishersRouter);
-app.use("/api/bookshelves", bookshelvesRouter);
-
 app.use(errorHandler);
 
 app.listen(PORT, () => {

@@ -27,9 +27,6 @@ export const bookInclude = {
     include: { author: { select: { id: true, name: true } } },
   },
   publisher: { select: { id: true, name: true } },
-  bookshelves: {
-    include: { bookshelf: { select: { id: true, name: true } } },
-  },
 } satisfies Prisma.BookInclude;
 
 type BookWithRelations = Prisma.BookGetPayload<{ include: typeof bookInclude }>;
@@ -61,15 +58,10 @@ export function serializeBook(
     yearPublished: book.yearPublished,
     originalPublicationYear: book.originalPublicationYear,
     edition: book.edition,
-    status: book.status,
-    dateAdded: book.dateAdded.toISOString(),
-    dateStartedReading: book.dateStartedReading?.toISOString() ?? null,
-    dateFinishedReading: book.dateFinishedReading?.toISOString() ?? null,
     coverImageUrl: book.coverImageUrl,
     author: book.author,
     additionalAuthors: book.additionalAuthors.map((aa) => aa.author),
     publisher: book.publisher,
-    bookshelves: book.bookshelves.map((bb) => bb.bookshelf),
     createdAt: book.createdAt.toISOString(),
     updatedAt: book.updatedAt.toISOString(),
   };
@@ -84,7 +76,6 @@ export function serializeBook(
         isPubliclyVisible: book.isPubliclyVisible,
         isGift: book.isGift,
         toPurchase: book.toPurchase,
-        readingOnly: book.readingOnly,
         notes: book.notes,
       }),
     };
@@ -107,19 +98,12 @@ function buildWhereClause(
   if (publicOnly) {
     where.isPubliclyVisible = true;
     where.toPurchase = publicCollection === "to_purchase";
-    if (publicCollection === "library") {
-      where.readingOnly = false;
-    }
   } else if (query.collection === "to_purchase") {
     where.toPurchase = true;
-  } else if (query.collection === "reading_only") {
-    where.readingOnly = true;
-    where.toPurchase = false;
   } else if (query.collection === "all") {
-    // No collection filter — includes library, reading-only, and wishlist
+    // No collection filter — includes library and wishlist
   } else {
     where.toPurchase = false;
-    where.readingOnly = false;
   }
 
   if (!publicOnly) {
@@ -131,13 +115,9 @@ function buildWhereClause(
   }
 
   if (query.format) where.format = query.format;
-  if (query.status) where.status = query.status;
   if (query.binding) where.binding = query.binding;
   if (query.authorId) where.authorId = query.authorId;
   if (query.publisherId) where.publisherId = query.publisherId;
-  if (query.bookshelfId) {
-    where.bookshelves = { some: { bookshelfId: query.bookshelfId } };
-  }
 
   if (query.minPrice !== undefined || query.maxPrice !== undefined) {
     where.purchasePrice = {};
@@ -199,8 +179,6 @@ function buildOrderBy(
       return { author: { name: direction } };
     case "publisher":
       return { publisher: { name: direction } };
-    case "status":
-      return { status: direction };
     case "format":
       return { format: direction };
     case "binding":
@@ -224,10 +202,8 @@ function buildOrderBy(
     case "isGift":
       return { isGift: direction };
     case "createdAt":
-      return { createdAt: direction };
-    case "dateAdded":
     default:
-      return { dateAdded: direction };
+      return { createdAt: direction };
   }
 }
 
@@ -268,26 +244,6 @@ async function resolveAuthorIds(
     const author = await findOrCreateAuthor(name);
     if (!resolved.includes(author.id)) {
       resolved.push(author.id);
-    }
-  }
-  return resolved;
-}
-
-async function resolveBookshelfIds(
-  ids: string[] = [],
-  names: string[] = [],
-): Promise<string[]> {
-  const resolved = [...ids];
-  for (const name of names) {
-    const trimmed = name.trim();
-    if (!trimmed) continue;
-    const shelf = await prisma.bookshelf.upsert({
-      where: { name: trimmed },
-      update: {},
-      create: { name: trimmed },
-    });
-    if (!resolved.includes(shelf.id)) {
-      resolved.push(shelf.id);
     }
   }
   return resolved;
@@ -339,10 +295,6 @@ function bookDataFromInput(
     yearPublished: input.yearPublished,
     originalPublicationYear: input.originalPublicationYear,
     edition: input.edition,
-    status: input.status,
-    dateAdded: input.dateAdded ?? undefined,
-    dateStartedReading: input.dateStartedReading,
-    dateFinishedReading: input.dateFinishedReading,
     isPubliclyVisible: input.isPubliclyVisible,
     isGift: input.isGift,
     toPurchase: input.toPurchase,
@@ -518,11 +470,6 @@ export async function createBook(input: CreateBookInput) {
     input.additionalAuthorIds,
     input.additionalAuthorNames,
   );
-  const bookshelfIds = await resolveBookshelfIds(
-    input.bookshelfIds,
-    input.bookshelfNames,
-  );
-
   const data = bookDataFromInput(input, authorId, publisherId) as Prisma.BookUncheckedCreateInput;
 
   if (input.toPurchase) {
@@ -536,9 +483,6 @@ export async function createBook(input: CreateBookInput) {
       title: input.title,
       additionalAuthors: {
         create: additionalAuthorIds.map((aid) => ({ authorId: aid })),
-      },
-      bookshelves: {
-        create: bookshelfIds.map((sid) => ({ bookshelfId: sid })),
       },
     },
     include: bookInclude,
@@ -586,19 +530,6 @@ export async function updateBook(id: string, input: UpdateBookInput) {
     if (additionalAuthorIds.length > 0) {
       await prisma.bookAdditionalAuthor.createMany({
         data: additionalAuthorIds.map((authorId) => ({ bookId: id, authorId })),
-      });
-    }
-  }
-
-  if (input.bookshelfIds !== undefined || input.bookshelfNames !== undefined) {
-    const bookshelfIds = await resolveBookshelfIds(
-      input.bookshelfIds ?? [],
-      input.bookshelfNames ?? [],
-    );
-    await prisma.bookBookshelf.deleteMany({ where: { bookId: id } });
-    if (bookshelfIds.length > 0) {
-      await prisma.bookBookshelf.createMany({
-        data: bookshelfIds.map((bookshelfId) => ({ bookId: id, bookshelfId })),
       });
     }
   }
@@ -722,14 +653,6 @@ export async function listPublicAuthors() {
 export async function listPublicPublishers() {
   return prisma.publisher.findMany({
     where: { books: { some: { isPubliclyVisible: true } } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-}
-
-export async function listPublicBookshelves() {
-  return prisma.bookshelf.findMany({
-    where: { books: { some: { book: { isPubliclyVisible: true } } } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

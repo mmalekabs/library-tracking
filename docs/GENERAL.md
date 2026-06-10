@@ -5,9 +5,11 @@
 A **personal library management system** with:
 
 - A **public website** visitors can browse (owned books catalog + optional public wishlist)
-- A **private admin area** where you manage books, authors, publishers, CSV imports, and statistics
+- A **private admin area** where you manage books, authors, publishers, imports, and statistics
 
 You are the only admin user (username/password in environment variables). The database is **PostgreSQL on Railway**; your PC runs the API and frontend locally during development.
+
+**Scope (current):** library vs wishlist only. No reading-session tracker, no reading-status field, no bookshelf tags, no reading-date fields on books.
 
 ---
 
@@ -56,11 +58,10 @@ Every book row has a boolean **`toPurchase`**:
 
 | Collection | `toPurchase` | Admin page | Public page |
 |------------|--------------|------------|-------------|
-| **Library** (owned / reading list) | `false` | `/admin/books` | `/` (catalog) |
+| **Library** (owned) | `false` | `/admin/books` | `/` (catalog) |
 | **To purchase** (wishlist) | `true` | `/admin/to-purchase` | `/to-purchase` |
-| **Reading-only** *(reading branch)* | `false` + `readingOnly: true` | Reading tracker only | *(not public)* |
 
-A book is in **one** collection at a time (library vs wishlist). **Reading-only** books are a separate flag for titles tracked outside your owned library. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then moves the book to your library.
+A book is in **one** collection at a time. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then sets `toPurchase: false`.
 
 Wishlist books may be saved **without an author**; author is required when adding to the library or when saving a library book.
 
@@ -76,6 +77,10 @@ Hidden books still appear in admin; they are not shown to visitors.
 ### Pricing (admin only)
 
 `purchasePrice`, `marketPrice`, and computed **savings** are stored and shown in admin. Public API responses **omit** prices.
+
+### When a book was added
+
+Use **`createdAt`** (record creation timestamp). There is no separate “date added” field.
 
 ---
 
@@ -100,84 +105,78 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 | Group | Pages |
 |-------|--------|
 | **Main** | Dashboard |
-| **Library** | Books, Reading, Add to read, To Purchase |
+| **Library** | Books, To Purchase |
 | **Catalog** | Authors, Publishers |
 | **Import** | CSV import, From Bookmory, From Goodreads, Recent additions |
 | **Tools** | Missing info |
 | **Settings** | Change admin password |
 
-**Search** (public catalog, admin books, authors, publishers, reading picker, missing info) is **Arabic-insensitive**: tashkeel and hamza/alef variants are ignored so `رجلا` matches `رجلاً`.
+**Search** (public catalog, admin books, authors, publishers, missing info) is **Arabic-insensitive**: tashkeel and hamza/alef variants are ignored so `رجلا` matches `رجلاً`.
 
 | Section | Purpose |
 |---------|---------|
-| **Dashboard** | Charts and KPIs (reading status, spending, **total value**, formats, etc.) |
+| **Dashboard** | Charts and KPIs (library vs wishlist, spending, **total value**, formats, timeline by `createdAt`, etc.) |
 | **Books** | Library collection — grid or **table** with inline edit, **sortable columns**, **column reorder** |
 | **To Purchase** | Wishlist — same UI patterns as Books |
-| **Authors** | **My library** / **To purchase** tabs; sortable columns; click name/count → books modal; **merge** duplicates; sticky toolbar |
+| **Authors** | **My library** / **To purchase** tabs; sortable columns; click name/count → books modal; **merge** duplicates |
 | **Publishers** | Same as authors (including merge) |
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
-| **From Bookmory** | Upload Bookmory Excel/CSV/JSON export → preview → merge |
-| **From Goodreads** | Enter Book Id or URL → fetch metadata → add to library or wishlist (alternative to manual add / CSV) |
-| **Missing info** | Books missing cover, ISBN-13, and/or market price; bulk fetch from Goodreads and عصير الكتب with live progress |
-| **Reading** | *( **`reading-tracking` branch only** )* Sessions, history, re-reads, period stats; books not in library; Goodreads import |
+| **From Bookmory** | Upload Bookmory Excel/CSV/JSON export → preview → merge into library or wishlist |
+| **From Goodreads** | Enter Book Id or URL → fetch metadata → add to library or wishlist |
+| **Missing info** | Books missing cover, ISBN-13, and/or market price; bulk fetch from Goodreads and عصير الكتب |
+| **Recent additions** | Books sorted by `createdAt` |
 
 **Books / To Purchase UI:**
 
 - **Grid view** (default): cards with visibility / delete / **Add to library** (wishlist only)
-- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); includes **Goodreads Id**; click a cell to edit; click outside the table → confirmation modal if changed
+- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); includes **Goodreads Id**; click a cell to edit
 - **Gift?** column — mark books received as gifts (also on book form under Pricing)
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
 
+**Book form — Collection section:**
+
+- Single checkbox: **To purchase (wishlist)** — unchecked = in library
+- **Publicly visible** checkbox (catalog vs wishlist page depending on collection)
+
 **Add to library (To Purchase):**
 
-- Opens a modal: **pages**, **author**, **publisher**, and **market / actual price** (required); **purchase price** (optional)
-- Saves metadata and sets `toPurchase: false`, `isPubliclyVisible: true`
+- Modal: **pages**, **author**, **publisher**, **market / actual price** (required); **purchase price** (optional)
+- Sets `toPurchase: false`, `isPubliclyVisible: true`
 
-**Authors / Publishers:**
-
-- **My library** / **To purchase** tabs — lists and book counts reflect that collection only
-- Click an **author/publisher name** or **book count** → modal listing their books in the current tab
-- Sortable **Name** and **Books** column headers
-- Select two or more rows → **Merge selected** → pick which name to keep; all linked books are reassigned
-- Title, search, add, and merge controls stay **sticky** below the admin header while you scroll the list
-
-**Add from Goodreads (library / wishlist):**
+**Add from Goodreads:**
 
 - `/admin/from-goodreads` — paste numeric **Book Id** or full `goodreads.com/book/show/…` URL
-- Fetches title, author(s), cover, ISBN, pages, year, format/binding
-- Description may appear in the preview only — it is **not** saved to book notes
-- Preview then **Add to library** or **Add to purchase list**; warns if that Goodreads Id already exists (library or reading-only book)
-- Third way to add books alongside manual form and CSV import
-
-**Reading tracker** *( **`reading-tracking` branch only** )*:
-
-- `/admin/reading` — tabs: **Reading now**, **History**, **Statistics**, **Time per book**
-- Track books you **don’t own** (PDF, ebook, borrowed) via **`readingOnly`** books — excluded from **Books** catalog and public site
-- **Start reading** — pick from library + reading-only books, add manually, or use **From Goodreads**
-- `/admin/reading/from-goodreads` — fetch Goodreads metadata → **Continue to edit** → save (no description in notes)
-- `/admin/reading/books/new` and `/admin/reading/books/:id/edit` — form for reading-only book metadata
-- **Log session** — date, pages read, minutes, optional note; **current page** = sum of **pages read** across all sessions (capped at book length)
-- **Sessions** — view, **edit**, or **delete** any logged session (Reading now + History)
-
-**Missing info & Goodreads metadata:**
-
-- On the book form, set **Goodreads Book Id** (`externalId`, same as CSV “Book Id”) and use **Fetch cover**
-- **Missing info** (`/admin/missing-info`) lists books missing **cover**, **ISBN-13** (empty or invalid), and/or **market price**
-  - **Fetch cover** / **Fetch ISBN-13** from Goodreads when Book Id is set
-  - **Fetch price** from عصير الكتب by ISBN-13 (site list price × 0.9)
-  - Bulk runs on the server with **streaming progress** (timer, count, current title)
-- **Add from Goodreads** uses the same scraper stack but returns full metadata, not only the cover
+- Preview then **Add to library** or **Add to purchase list**
+- Description may appear in preview only — **not** saved to book notes
 
 **Import from Bookmory:**
 
-- Map **`goodreadsID`** column → Goodreads Book Id
-- Duplicate mode **Match existing — update Goodreads Id only** writes `externalId` only (no other fields or reading history)
+- Maps **`goodreadsID`** column → Goodreads Book Id
+- Duplicate mode **Match existing — update Goodreads Id only** writes `externalId` only
+- **`importAs`**: `library` or `to_purchase` (no reading-history import)
 
 **Dashboard pricing KPIs:**
 
 - **Total spent** — sum of purchase prices
-- **Total value** — sum of **market / actual prices** (books with a market price set)
+- **Total value** — sum of **market / actual prices**
 - **Total savings** — where both prices exist
+- **In library** / **To purchase** — counts from `toPurchase` flag
+
+---
+
+## Removed features
+
+These existed in earlier experiments (including a short-lived `reading-tracking` git branch) but are **not** in the current app or schema:
+
+| Removed | Notes |
+|---------|-------|
+| Reading tracker | Sessions, history, goals, reading-only books, `/admin/reading` |
+| `ReadingStatus` | `TO_READ`, `READING`, `READ`, etc. |
+| Bookshelves | `Bookshelf` model, shelf tags on books |
+| Reading dates | `dateAdded`, `dateStartedReading`, `dateFinishedReading` |
+| Public `/api/bookshelves` | Filter endpoint removed |
+
+Migrations `20250602120000_remove_reading_tracker` and `20250603120000_simplify_book_collection` apply these removals. See DETAILED.md §3 and §18.
 
 ---
 
@@ -195,7 +194,7 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 ## Local development (summary)
 
 1. Copy `server/.env.example` → `server/.env` and set **public** Railway `DATABASE_URL`, `JWT_SECRET`, admin credentials.
-2. `cd server` → `npm install` → `npx prisma migrate deploy` → `npm run db:seed`
+2. `cd server` → `npm install` → `npx prisma migrate deploy` → `npx prisma generate` → `npm run db:seed`
 3. `npm run dev` (API on port **3000**)
 4. `cd client` → `npm install` → `npm run dev` (UI on port **5173**, proxies `/api` to 3000)
 
@@ -221,8 +220,6 @@ Secrets live in **Railway Variables**, not in git. See [SECURITY.md](../SECURITY
 
 ## Implementation history (phases)
 
-The project was built incrementally:
-
 | Phase | Delivered |
 |-------|-----------|
 | 1 | Monorepo, Prisma schema, health endpoint |
@@ -235,24 +232,18 @@ The project was built incrementally:
 | 8 | To Purchase collection + public wishlist |
 | 9 | Admin table view + inline edit + pagination |
 | 10 | GitHub-ready secrets handling (`SECURITY.md`, `.gitignore`) |
-| 11 | Goodreads cover fetch (form + Missing info page with streaming bulk progress) |
-| 12 | Merge authors/publishers; optional wishlist author; add-to-library modal; sticky entity toolbar |
-| 13 | Books table: server-side sortable columns + client column reorder (Columns modal) |
+| 11 | Goodreads cover fetch (form + Missing info with streaming bulk progress) |
+| 12 | Merge authors/publishers; optional wishlist author; add-to-library modal |
+| 13 | Books table: server-side sortable columns + client column reorder |
 | 14 | Authors/Publishers: collection tabs, sortable columns, clickable book lists |
 | 15 | Dashboard total value KPI; **Gift?** (`isGift`) on books |
 | 16 | Add from Goodreads page (full metadata fetch by Id/URL) |
-| 17 | Reading tracker (sessions, history, re-reads, stats) — **`reading-tracking` branch** |
-| 18 | Reading-only books (`readingOnly`), Goodreads add-to-read, session edit/delete, auto current page — **`reading-tracking` branch** |
-| 19 | Import from Bookmory (preview before merge; goodreadsID column; Goodreads Id-only update mode) |
-| 20 | Missing info (ISBN-13 + عصير الكتب market price); Goodreads Id books table column; admin rate-limit fix |
-| 21 | Arabic-insensitive search; grouped collapsible admin sidebar |
+| 17 | Import from Bookmory (preview; goodreadsID column; Goodreads Id-only update mode) |
+| 18 | Missing info (ISBN-13 + عصير الكتب market price); Goodreads Id books table column |
+| 19 | Arabic-insensitive search; grouped collapsible admin sidebar |
+| 20 | **Simplification** — removed reading tracker, reading status, bookshelves, reading dates; library vs wishlist only |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
-
-### Branch note
-
-- **`main`** — library management features (through phase 16 above).
-- **`reading-tracking`** — same app plus the **Reading** admin section, `ReadingEntry` / `ReadingSession` tables, and `Book.readingOnly`. Merge or cherry-pick between branches as needed; run migrations after switching (including `20250529120000_book_reading_only` on the reading branch).
 
 ---
 

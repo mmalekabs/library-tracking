@@ -7,7 +7,6 @@ import importRouter from "./import.js";
 import statsRouter from "./stats.js";
 import goodreadsRouter from "./goodreads.js";
 import aseeralkotbRouter from "./aseeralkotb.js";
-import readingRouter from "./reading.js";
 import bookmoryImportRouter from "./bookmoryImport.js";
 
 const router = Router();
@@ -20,7 +19,6 @@ router.use("/import", importRouter);
 router.use("/lookup", lookupRouter);
 router.use("/goodreads", goodreadsRouter);
 router.use("/aseeralkotb", aseeralkotbRouter);
-router.use("/reading", readingRouter);
 router.use("/bookmory", bookmoryImportRouter);
 
 export default router;

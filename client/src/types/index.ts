@@ -1,12 +1,5 @@
 export type BookFormat = "PHYSICAL" | "DIGITAL" | "AUDIO";
 
-export type ReadingStatus =
-  | "TO_READ"
-  | "READING"
-  | "READ"
-  | "DID_NOT_FINISH"
-  | "ON_HOLD";
-
 export type BindingType =
   | "PAPERBACK"
   | "HARDCOVER"
@@ -20,11 +13,6 @@ export interface Author {
 }
 
 export interface Publisher {
-  id: string;
-  name: string;
-}
-
-export interface Bookshelf {
   id: string;
   name: string;
 }
@@ -45,14 +33,9 @@ export interface Book {
   yearPublished: number | null;
   originalPublicationYear: number | null;
   edition: string | null;
-  status: ReadingStatus;
-  dateAdded: string;
-  dateStartedReading: string | null;
-  dateFinishedReading: string | null;
   isPubliclyVisible?: boolean;
   isGift?: boolean;
   toPurchase?: boolean;
-  readingOnly?: boolean;
   createdAt?: string;
   updatedAt?: string;
   coverImageUrl: string | null;
@@ -60,5 +43,4 @@ export interface Book {
   author: Author | null;
   additionalAuthors?: Author[];
   publisher: Publisher | null;
-  bookshelves?: Bookshelf[];
 }

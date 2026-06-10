@@ -26,8 +26,8 @@ export async function getOverview() {
     publicBooks,
     hiddenBooks,
     booksAddedThisMonth,
-    readCount,
-    statusGroups,
+    libraryBooks,
+    wishlistBooks,
     formatGroups,
     books,
   ] = await Promise.all([
@@ -37,9 +37,9 @@ export async function getOverview() {
     prisma.publisher.count(),
     prisma.book.count({ where: { isPubliclyVisible: true } }),
     prisma.book.count({ where: { isPubliclyVisible: false } }),
-    prisma.book.count({ where: { dateAdded: { gte: monthStart } } }),
-    prisma.book.count({ where: { status: "READ" } }),
-    prisma.book.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.book.count({ where: { createdAt: { gte: monthStart } } }),
+    prisma.book.count({ where: { toPurchase: false } }),
+    prisma.book.count({ where: { toPurchase: true } }),
     prisma.book.groupBy({ by: ["format"], _count: { _all: true } }),
     prisma.book.findMany({
       select: {
@@ -78,17 +78,6 @@ export async function getOverview() {
 
   const totalPages = pageSum._sum.numberOfPages ?? 0;
 
-  const byStatus: Record<string, number> = {
-    TO_READ: 0,
-    READING: 0,
-    READ: 0,
-    DID_NOT_FINISH: 0,
-    ON_HOLD: 0,
-  };
-  for (const g of statusGroups) {
-    byStatus[g.status] = g._count._all;
-  }
-
   const byFormat: Record<string, number> = {
     PHYSICAL: 0,
     DIGITAL: 0,
@@ -108,11 +97,11 @@ export async function getOverview() {
     medianPrice: medianPrice !== null ? Math.round(medianPrice * 100) / 100 : null,
     totalAuthors: authorCount,
     totalPublishers: publisherCount,
-    booksRead: readCount,
+    libraryBooks,
+    wishlistBooks,
     publicBooks,
     hiddenBooks,
     booksAddedThisMonth,
-    byStatus,
     byFormat,
     avgPagesPerBook:
       totalBooks > 0 ? Math.round(totalPages / totalBooks) : null,
@@ -129,11 +118,20 @@ export async function getOverview() {
 export async function getReading() {
   const overview = await getOverview();
   const total = overview.totalBooks || 1;
-  const breakdown = Object.entries(overview.byStatus).map(([status, count]) => ({
-    status,
-    count,
-    percentage: Math.round((count / total) * 1000) / 10,
-  }));
+  const breakdown = [
+    {
+      key: "library",
+      label: "In library",
+      count: overview.libraryBooks,
+      percentage: Math.round((overview.libraryBooks / total) * 1000) / 10,
+    },
+    {
+      key: "wishlist",
+      label: "To purchase",
+      count: overview.wishlistBooks,
+      percentage: Math.round((overview.wishlistBooks / total) * 1000) / 10,
+    },
+  ];
   return { breakdown, total: overview.totalBooks };
 }
 
@@ -146,7 +144,7 @@ export async function getSpending() {
       marketPrice: true,
       currency: true,
       format: true,
-      dateAdded: true,
+      createdAt: true,
       author: { select: { name: true } },
     },
     orderBy: { purchasePrice: "desc" },
@@ -160,7 +158,7 @@ export async function getSpending() {
   for (const book of books) {
     const price = decimalToNumber(book.purchasePrice);
     if (price === null) continue;
-    const key = monthKey(book.dateAdded);
+    const key = monthKey(book.createdAt);
     sortedMonths.add(key);
     monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + price);
   }
@@ -353,7 +351,7 @@ export async function getFormats() {
 export async function getTimeline() {
   const books = await prisma.book.findMany({
     select: {
-      dateAdded: true,
+      createdAt: true,
       format: true,
       originalPublicationYear: true,
       yearPublished: true,
@@ -365,7 +363,7 @@ export async function getTimeline() {
   const monthlyByFormat = new Map<string, Record<string, number>>();
 
   for (const book of books) {
-    const key = monthKey(book.dateAdded);
+    const key = monthKey(book.createdAt);
     monthlyTotal.set(key, (monthlyTotal.get(key) ?? 0) + 1);
     const fmtMap = monthlyByFormat.get(key) ?? {
       PHYSICAL: 0,
@@ -439,23 +437,6 @@ export async function getTimeline() {
     oldestBook: oldest,
     newestBook: newest,
   };
-}
-
-export async function getBookshelves() {
-  const shelves = await prisma.bookshelf.findMany({
-    select: {
-      id: true,
-      name: true,
-      _count: { select: { books: true } },
-    },
-    orderBy: { books: { _count: "desc" } },
-  });
-
-  return shelves.map((s) => ({
-    id: s.id,
-    name: s.name,
-    bookCount: s._count.books,
-  }));
 }
 
 export async function getPagesAndBinding() {
@@ -536,7 +517,7 @@ export async function getPagesAndBinding() {
 export async function getLists() {
   const [
     recent,
-    currentlyReading,
+    wishlist,
     noMarketPrice,
     noPages,
     noCover,
@@ -544,20 +525,21 @@ export async function getLists() {
   ] = await Promise.all([
     prisma.book.findMany({
       take: 10,
-      orderBy: { dateAdded: "desc" },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         title: true,
-        dateAdded: true,
+        createdAt: true,
         author: { select: { name: true } },
       },
     }),
     prisma.book.findMany({
-      where: { status: "READING" },
+      where: { toPurchase: true },
+      take: 10,
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         title: true,
-        dateStartedReading: true,
         author: { select: { name: true } },
       },
     }),
@@ -610,13 +592,12 @@ export async function getLists() {
 
   return {
     recentlyAdded: recent.map((b) => ({
-      ...b,
-      dateAdded: b.dateAdded.toISOString(),
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      createdAt: b.createdAt.toISOString(),
     })),
-    currentlyReading: currentlyReading.map((b) => ({
-      ...b,
-      dateStartedReading: b.dateStartedReading?.toISOString() ?? null,
-    })),
+    wishlist,
     withoutMarketPrice: { count: noMarketPriceCount, books: noMarketPrice },
     withoutPages: { count: noPagesCount, books: noPages },
     withoutCover: { count: noCoverCount, books: noCover },

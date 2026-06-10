@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Papa from "papaparse";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
-import { CSV_FIELD_OPTIONS, FORMAT_OPTIONS, STATUS_OPTIONS } from "@/constants/book";
+import { CSV_FIELD_OPTIONS, FORMAT_OPTIONS } from "@/constants/book";
 import { detectColumnMapping } from "@/constants/import";
 import { executeCsvImport, type ImportReport, type ImportSettings } from "@/lib/import";
 import { inputClass } from "@/components/admin/FormSection";
@@ -31,7 +31,6 @@ export function ImportPage() {
     defaultFormat: "PHYSICAL",
     defaultToPurchase: false,
     defaultVisibility: true,
-    defaultStatus: "TO_READ",
   });
 
   const parseFile = useCallback((f: File) => {
@@ -288,25 +287,6 @@ export function ImportPage() {
               className={inputClass}
             >
               {FORMAT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Default reading status">
-            <select
-              value={settings.defaultStatus}
-              onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  defaultStatus: e.target.value as ImportSettings["defaultStatus"],
-                }))
-              }
-              className={inputClass}
-            >
-              {STATUS_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>

@@ -15,14 +15,6 @@ enum BookFormat {
   AUDIO
 }
 
-enum ReadingStatus {
-  TO_READ
-  READING
-  READ
-  DID_NOT_FINISH
-  ON_HOLD
-}
-
 enum BindingType {
   PAPERBACK
   HARDCOVER
@@ -58,14 +50,6 @@ model Publisher {
   books Book[]
 }
 
-model Bookshelf {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-
-  books BookBookshelf[]
-}
-
 model Book {
   id         String  @id @default(cuid())
   externalId String? @unique
@@ -84,16 +68,9 @@ model Book {
   originalPublicationYear Int?
   edition                 String?
 
-  status              ReadingStatus @default(TO_READ)
-  dateAdded           DateTime      @default(now())
-  dateStartedReading  DateTime?
-  dateFinishedReading DateTime?
-
   isPubliclyVisible Boolean @default(true)
   isGift            Boolean @default(false)
   toPurchase        Boolean @default(false)
-  /// Tracked in reading tracker only — excluded from library catalog and public site.
-  readingOnly       Boolean @default(false)
   coverImageUrl     String?
   notes             String?
 
@@ -106,15 +83,11 @@ model Book {
   additionalAuthors BookAdditionalAuthor[]
   publisherId       String?
   publisher         Publisher?             @relation(fields: [publisherId], references: [id])
-  bookshelves       BookBookshelf[]
-  readingEntries    ReadingEntry[]
 
   @@index([title])
-  @@index([status])
   @@index([format])
   @@index([isPubliclyVisible])
   @@index([toPurchase])
-  @@index([readingOnly])
   @@index([authorId])
   @@index([publisherId])
 }
@@ -126,51 +99,4 @@ model BookAdditionalAuthor {
   author   Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@id([bookId, authorId])
-}
-
-model BookBookshelf {
-  bookId      String
-  bookshelfId String
-  book        Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  bookshelf   Bookshelf @relation(fields: [bookshelfId], references: [id], onDelete: Cascade)
-
-  @@id([bookId, bookshelfId])
-}
-
-/// One read-through of a book (supports re-reads and full history).
-model ReadingEntry {
-  id          String        @id @default(cuid())
-  bookId      String
-  book        Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  status      ReadingStatus @default(READING)
-  startedAt   DateTime      @default(now())
-  finishedAt  DateTime?
-  currentPage Int?
-  rating      Int?
-  review      String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  sessions ReadingSession[]
-
-  @@index([bookId])
-  @@index([status])
-  @@index([startedAt])
-  @@index([finishedAt])
-}
-
-/// Daily reading log: pages and optional time spent.
-model ReadingSession {
-  id          String       @id @default(cuid())
-  entryId     String
-  entry       ReadingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  sessionDate DateTime     @db.Date
-  pagesRead   Int          @default(0)
-  minutesRead Int?
-  endPage     Int?
-  note        String?
-  createdAt   DateTime     @default(now())
-
-  @@index([entryId])
-  @@index([sessionDate])
 }

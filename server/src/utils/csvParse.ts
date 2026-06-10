@@ -107,8 +107,6 @@ export const CSV_FIELD_KEYS = [
   "numberOfPages",
   "yearPublished",
   "originalPublicationYear",
-  "dateAdded",
-  "bookshelves",
 ] as const;
 
 export type CsvFieldKey = (typeof CSV_FIELD_KEYS)[number];
@@ -127,8 +125,6 @@ export const AUTO_COLUMN_MAP: Record<string, CsvFieldKey> = {
   "number of pages": "numberOfPages",
   "year published": "yearPublished",
   "original publication year": "originalPublicationYear",
-  "date added": "dateAdded",
-  bookshelves: "bookshelves",
 };
 
 export function detectColumnMapping(headers: string[]): Record<string, CsvFieldKey | ""> {

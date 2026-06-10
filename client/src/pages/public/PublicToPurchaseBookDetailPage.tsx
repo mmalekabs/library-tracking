@@ -112,23 +112,13 @@ export function PublicToPurchaseBookDetailPage() {
                 <dd>{book.originalPublicationYear}</dd>
               </>
             )}
-            <dt className="font-medium text-gray-500">Added to list</dt>
-            <dd>{new Date(book.dateAdded).toLocaleDateString()}</dd>
+            {book.createdAt && (
+              <>
+                <dt className="font-medium text-gray-500">Added to list</dt>
+                <dd>{new Date(book.createdAt).toLocaleDateString()}</dd>
+              </>
+            )}
           </dl>
-
-          {book.bookshelves && book.bookshelves.length > 0 && (
-            <div className="mt-6 flex flex-wrap gap-2">
-              {book.bookshelves.map((shelf) => (
-                <span
-                  key={shelf.id}
-                  className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
-                  dir="auto"
-                >
-                  {shelf.name}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>

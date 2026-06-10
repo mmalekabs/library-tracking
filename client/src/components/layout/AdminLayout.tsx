@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ReadingTimerBar } from "@/components/reading/ReadingTimerBar";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   BookOpen,
   Book,
@@ -14,7 +13,6 @@ import {
   X,
   ShoppingCart,
   ImageOff,
-  BookMarked,
   BookPlus,
   FileSpreadsheet,
   History,
@@ -49,12 +47,6 @@ const navGroups: NavGroup[] = [
     label: "Library",
     items: [
       { to: "/admin/books", label: "Books", icon: Book },
-      { to: "/admin/reading", label: "Reading", icon: BookMarked, end: true },
-      {
-        to: "/admin/reading/from-goodreads",
-        label: "Add to read",
-        icon: BookPlus,
-      },
       { to: "/admin/to-purchase", label: "To Purchase", icon: ShoppingCart },
     ],
   },
@@ -105,8 +97,6 @@ const navGroups: NavGroup[] = [
 const pageTitles: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/books": "Books",
-  "/admin/reading": "Reading",
-  "/admin/reading/from-goodreads": "Add to read from Goodreads",
   "/admin/to-purchase": "To Purchase",
   "/admin/authors": "Authors",
   "/admin/publishers": "Publishers",
@@ -233,7 +223,6 @@ function SidebarNav({
 export function AdminLayout() {
   const { admin } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const basePath =
@@ -313,15 +302,10 @@ export function AdminLayout() {
             </span>
           )}
         </header>
-        <main className="flex-1 p-4 pb-24 md:p-8 md:pb-24">
+        <main className="flex-1 p-4 md:p-8">
           <Outlet />
         </main>
       </div>
-      <ReadingTimerBar
-        onStopAndLog={() => {
-          navigate("/admin/reading");
-        }}
-      />
     </div>
   );
 }

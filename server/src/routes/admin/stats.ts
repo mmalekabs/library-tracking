@@ -55,13 +55,6 @@ router.get(
 );
 
 router.get(
-  "/bookshelves",
-  asyncHandler(async (_req, res) => {
-    sendSuccess(res, await statsService.getBookshelves());
-  }),
-);
-
-router.get(
   "/pages",
   asyncHandler(async (_req, res) => {
     sendSuccess(res, await statsService.getPagesAndBinding());

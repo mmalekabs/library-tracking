@@ -10,7 +10,7 @@ import { inputClass } from "@/components/admin/FormSection";
 import { TablePagination } from "@/components/admin/TablePagination";
 import { DEFAULT_PAGE_SIZE, type PageSize } from "@/constants/pagination";
 
-type CollectionFilter = "all" | "library" | "reading_only" | "to_purchase";
+type CollectionFilter = "all" | "library" | "to_purchase";
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -18,7 +18,6 @@ function isoDate(d: Date): string {
 
 function bookTypeLabel(book: Book): string {
   if (book.toPurchase) return "To purchase";
-  if (book.readingOnly) return "Reading only";
   return "Library";
 }
 
@@ -104,7 +103,6 @@ export function RecentAdditionsPage() {
     mutationFn: bulkDeleteBooks,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["books"] });
-      queryClient.invalidateQueries({ queryKey: ["reading"] });
       setSelected(new Set());
       toast.success(`Deleted ${result.deleted} book(s)`);
     },
@@ -210,7 +208,6 @@ export function RecentAdditionsPage() {
           >
             <option value="all">All types</option>
             <option value="library">Library</option>
-            <option value="reading_only">Reading tracker only</option>
             <option value="to_purchase">To purchase</option>
           </select>
         </label>

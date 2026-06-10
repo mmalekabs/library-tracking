@@ -1,17 +1,15 @@
 import type { BookSortBy } from "@/lib/books";
-import type { Book, BindingType, BookFormat, ReadingStatus } from "@/types";
+import type { Book, BindingType, BookFormat } from "@/types";
 import {
   BINDING_OPTIONS,
   CURRENCY_OPTIONS,
   FORMAT_OPTIONS,
-  STATUS_OPTIONS,
 } from "@/constants/book";
 
 export type BookTableField =
   | "title"
   | "author"
   | "publisher"
-  | "status"
   | "format"
   | "binding"
   | "purchasePrice"
@@ -30,7 +28,6 @@ export const BOOK_TABLE_COLUMNS = [
   { key: "title", label: "Title", minWidth: "12rem" },
   { key: "author", label: "Author", minWidth: "9rem" },
   { key: "publisher", label: "Publisher", minWidth: "8rem" },
-  { key: "status", label: "Status", minWidth: "7rem" },
   { key: "format", label: "Format", minWidth: "6rem" },
   { key: "binding", label: "Binding", minWidth: "7rem" },
   { key: "purchasePrice", label: "Purchase", minWidth: "5rem" },
@@ -55,7 +52,6 @@ export const BOOK_TABLE_SORT_BY: Record<BookTableColumnField, BookSortBy> = {
   title: "title",
   author: "author",
   publisher: "publisher",
-  status: "status",
   format: "format",
   binding: "binding",
   purchasePrice: "purchasePrice",
@@ -82,8 +78,6 @@ export function getBookFieldDisplay(book: Book, field: BookTableField): string {
       return book.author?.name ?? "";
     case "publisher":
       return book.publisher?.name ?? "";
-    case "status":
-      return STATUS_OPTIONS.find((o) => o.value === book.status)?.label ?? book.status;
     case "format":
       return FORMAT_OPTIONS.find((o) => o.value === book.format)?.label ?? book.format;
     case "binding":
@@ -118,8 +112,6 @@ export function getBookFieldDisplay(book: Book, field: BookTableField): string {
 /** Raw value used while editing (enum values, numbers as strings, etc.) */
 export function getBookFieldRaw(book: Book, field: BookTableField): string {
   switch (field) {
-    case "status":
-      return book.status;
     case "format":
       return book.format;
     case "binding":
@@ -172,8 +164,6 @@ export function buildBookFieldPayload(
       return { authorName: trimmed };
     case "publisher":
       return trimmed ? { publisherName: trimmed } : { publisherId: null };
-    case "status":
-      return { status: trimmed as ReadingStatus };
     case "format":
       return { format: trimmed as BookFormat };
     case "binding":
@@ -215,7 +205,6 @@ export function buildBookFieldPayload(
 
 export function fieldUsesSelect(field: BookTableField): boolean {
   return (
-    field === "status" ||
     field === "format" ||
     field === "binding" ||
     field === "currency" ||
@@ -226,8 +215,6 @@ export function fieldUsesSelect(field: BookTableField): boolean {
 
 export function getSelectOptions(field: BookTableField) {
   switch (field) {
-    case "status":
-      return STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
     case "format":
       return FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
     case "binding":

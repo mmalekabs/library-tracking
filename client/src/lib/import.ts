@@ -5,12 +5,6 @@ export interface ImportSettings {
   defaultFormat: "PHYSICAL" | "DIGITAL" | "AUDIO";
   defaultToPurchase: boolean;
   defaultVisibility: boolean;
-  defaultStatus:
-    | "TO_READ"
-    | "READING"
-    | "READ"
-    | "DID_NOT_FINISH"
-    | "ON_HOLD";
   columnMapping: Record<string, string>;
 }
 
@@ -21,7 +15,6 @@ export interface ImportReport {
   errors: { row: number; message: string }[];
   createdAuthors: string[];
   createdPublishers: string[];
-  createdBookshelves: string[];
 }
 
 export async function executeCsvImport(

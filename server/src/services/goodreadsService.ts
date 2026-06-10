@@ -29,7 +29,7 @@ export interface GoodreadsBookData {
   bookFormatLabel: string | null;
   description: string | null;
   language: string | null;
-  existingBook: { id: string; title: string; readingOnly: boolean } | null;
+  existingBook: { id: string; title: string } | null;
 }
 
 export function isValidGoodreadsBookId(
@@ -304,7 +304,7 @@ export async function fetchBookDataByBookId(
 
   const existing = await prisma.book.findUnique({
     where: { externalId: bookId },
-    select: { id: true, title: true, readingOnly: true },
+    select: { id: true, title: true },
   });
 
   return {

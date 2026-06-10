@@ -1,11 +1,10 @@
 import Papa from "papaparse";
-import type { BookFormat, ReadingStatus } from "@prisma/client";
+import type { BookFormat } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import * as bookService from "./bookService.js";
 import {
   detectColumnMapping,
   mapBindingValue,
-  parseCsvDate,
   parseIsbn,
   parseIsbn13,
   parseOptionalInt,
@@ -28,7 +27,6 @@ export interface ImportReport {
   errors: ImportRowError[];
   createdAuthors: string[];
   createdPublishers: string[];
-  createdBookshelves: string[];
 }
 
 function getMappedValue(
@@ -59,7 +57,6 @@ function rowToBookInput(
   );
 
   const additionalRaw = getMappedValue(row, mapping, "additionalAuthors");
-  const bookshelfRaw = getMappedValue(row, mapping, "bookshelves");
 
   return {
     title,
@@ -85,16 +82,9 @@ function rowToBookInput(
     originalPublicationYear: parseOptionalInt(
       getMappedValue(row, mapping, "originalPublicationYear"),
     ),
-    dateAdded:
-      parseCsvDate(getMappedValue(row, mapping, "dateAdded")) ?? new Date(),
-    dateStartedReading: null,
-    dateFinishedReading: null,
-    status: settings.defaultStatus as ReadingStatus,
     isPubliclyVisible: settings.defaultVisibility,
     isGift: false,
     toPurchase: settings.defaultToPurchase,
-    bookshelfNames: splitCommaList(bookshelfRaw),
-    bookshelfIds: [],
     coverImageUrl: null,
     notes: null,
     edition: null,
@@ -119,14 +109,21 @@ async function findDuplicate(
     });
     if (author) {
       const byTitle = await prisma.book.findFirst({
-        where: { title: input.title, authorId: author.id },
+        where: {
+          title: { equals: input.title.trim(), mode: "insensitive" },
+          authorId: author.id,
+        },
         select: { id: true },
       });
       if (byTitle) return byTitle;
     }
   }
 
-  return null;
+  const byTitle = await prisma.book.findFirst({
+    where: { title: { equals: input.title.trim(), mode: "insensitive" } },
+    select: { id: true },
+  });
+  return byTitle;
 }
 
 export function parseCsvPreview(csvContent: string) {
@@ -179,7 +176,6 @@ export async function importBooksFromCsv(
     errors: [],
     createdAuthors: [],
     createdPublishers: [],
-    createdBookshelves: [],
   };
 
   const mapping = settings.columnMapping;
@@ -223,11 +219,6 @@ export async function importBooksFromCsv(
         !report.createdPublishers.includes(input.publisherName)
       ) {
         report.createdPublishers.push(input.publisherName);
-      }
-      for (const name of input.bookshelfNames ?? []) {
-        if (!report.createdBookshelves.includes(name)) {
-          report.createdBookshelves.push(name);
-        }
       }
     } catch (err) {
       report.failed++;

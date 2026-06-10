@@ -3,7 +3,7 @@ import { AUTH_TOKEN_KEY } from "./constants";
 
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "/api";
-import type { Book, BookFormat, BindingType, ReadingStatus } from "@/types";
+import type { Book, BookFormat, BindingType } from "@/types";
 
 export interface PaginationMeta {
   page: number;
@@ -16,7 +16,6 @@ export type BookSortBy =
   | "title"
   | "author"
   | "publisher"
-  | "status"
   | "format"
   | "binding"
   | "purchasePrice"
@@ -28,7 +27,6 @@ export type BookSortBy =
   | "externalId"
   | "isPubliclyVisible"
   | "isGift"
-  | "dateAdded"
   | "createdAt";
 
 export interface BookListParams {
@@ -36,15 +34,13 @@ export interface BookListParams {
   limit?: number;
   search?: string;
   format?: BookFormat;
-  status?: ReadingStatus;
   binding?: BindingType;
   authorId?: string;
   publisherId?: string;
-  bookshelfId?: string;
   sortBy?: BookSortBy;
   sortOrder?: "asc" | "desc";
   visibility?: "all" | "public" | "hidden";
-  collection?: "library" | "to_purchase" | "reading_only" | "all";
+  collection?: "library" | "to_purchase" | "all";
   createdFrom?: string;
   createdTo?: string;
 }

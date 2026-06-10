@@ -97,7 +97,6 @@ export function FromGoodreadsPage() {
       binding: preview.binding,
       toPurchase,
       isPubliclyVisible: !toPurchase,
-      status: "TO_READ",
       currency: "SAR",
     });
   };
@@ -150,18 +149,11 @@ export function FromGoodreadsPage() {
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               Already tracked:{" "}
               <Link
-                to={
-                  preview.existingBook.readingOnly
-                    ? `/admin/reading/books/${preview.existingBook.id}/edit`
-                    : `/admin/books/${preview.existingBook.id}/edit`
-                }
+                to={`/admin/books/${preview.existingBook.id}/edit`}
                 className="font-medium underline hover:text-amber-700"
               >
                 {preview.existingBook.title}
               </Link>
-              {preview.existingBook.readingOnly
-                ? " (not in library)"
-                : " (in library)"}
             </div>
           )}
 

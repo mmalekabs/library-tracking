@@ -16,7 +16,3 @@ export function fetchAdminPublishers(search = "") {
   return apiFetch<NamedEntity[]>(`/admin/lookup/publishers${q}`);
 }
 
-export function fetchAdminBookshelves(search = "") {
-  const q = search ? `?search=${encodeURIComponent(search)}` : "";
-  return apiFetch<NamedEntity[]>(`/admin/lookup/bookshelves${q}`);
-}

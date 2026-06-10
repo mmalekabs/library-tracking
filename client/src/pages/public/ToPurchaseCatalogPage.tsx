@@ -26,7 +26,7 @@ export function ToPurchaseCatalogPage() {
         page,
         limit: 20,
         search: debouncedSearch || undefined,
-        sortBy: "dateAdded",
+        sortBy: "createdAt",
         sortOrder: "desc",
       }),
   });

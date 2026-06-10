@@ -16,7 +16,6 @@ import {
   type BookmoryImportSettings,
   type BookmoryUploadProgress,
 } from "@/lib/bookmoryImport";
-import { STATUS_LABELS } from "@/constants/stats";
 import { inputClass } from "@/components/admin/FormSection";
 
 type Step = "upload" | "preview" | "settings" | "report";
@@ -39,9 +38,8 @@ export function BookmoryImportPage() {
 
   const [settings, setSettings] = useState<BookmoryImportSettings>({
     duplicateMode: "skip",
-    importAs: "reading_only",
+    importAs: "library",
     isPubliclyVisible: true,
-    importReadingEntries: true,
     allowMissingAuthor: true,
   });
 
@@ -108,7 +106,6 @@ export function BookmoryImportPage() {
       setReport(result);
       setStep("report");
       queryClient.invalidateQueries({ queryKey: ["books"] });
-      queryClient.invalidateQueries({ queryKey: ["reading"] });
       toast.success(
         `Imported ${result.imported + result.updated} books (${result.skipped} skipped)`,
       );
@@ -150,11 +147,9 @@ export function BookmoryImportPage() {
           Database (.db) backups are not supported — use the Excel export instead.
         </p>
         <p className="mt-2 text-xs text-blue-700">
-          Books import into the <strong>reading tracker</strong> by default. Add a{" "}
-          <strong>library</strong> column with <code>true</code> or{" "}
-          <code>false</code> to control which rows also appear in your library
-          catalog. A <strong>goodreadsID</strong> column is mapped to Goodreads
-          Book Id.
+          Books import into your <strong>library</strong> by default. Status,
+          start/finish dates, and page counts are saved on each book record. A{" "}
+          <strong>goodreadsID</strong> column is mapped to Goodreads Book Id.
         </p>
       </div>
 
@@ -244,12 +239,10 @@ export function BookmoryImportPage() {
                   <th className="px-4 py-3">#</th>
                   <th className="px-4 py-3">Title</th>
                   <th className="px-4 py-3">Author</th>
-                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Pages</th>
                   <th className="px-4 py-3">Read time</th>
                   <th className="px-4 py-3">Goodreads Id</th>
                   <th className="px-4 py-3">Library</th>
-                  <th className="px-4 py-3">Dates</th>
                   <th className="px-4 py-3">Match</th>
                 </tr>
               </thead>
@@ -262,9 +255,6 @@ export function BookmoryImportPage() {
                     </td>
                     <td className="max-w-[10rem] truncate px-4 py-3 text-gray-600" dir="auto">
                       {book.author ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {STATUS_LABELS[book.status] ?? book.status}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {book.pagesRead ?? book.numberOfPages ?? "—"}
@@ -290,10 +280,6 @@ export function BookmoryImportPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {book.inLibrary ? "true" : "false"}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {book.dateStarted ?? "—"}
-                      {book.dateFinished ? ` → ${book.dateFinished}` : ""}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {book.duplicate ? (
@@ -338,9 +324,7 @@ export function BookmoryImportPage() {
         <div className="mt-6 max-w-xl space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-gray-600">
             Ready to import <strong>{preview.summary.total}</strong> books from{" "}
-            <strong>{preview.fileName}</strong>.{" "}
-            <strong>{preview.summary.inLibrary}</strong> will go to your library;
-            the rest go to the reading tracker only.
+            <strong>{preview.fileName}</strong>.
           </p>
 
           <label className="block text-sm">
@@ -355,42 +339,26 @@ export function BookmoryImportPage() {
               }
               className={`${inputClass} mt-1`}
             >
-              <option value="reading_only">
-                Reading tracker (use library column per row)
-              </option>
-              <option value="library">All rows to library</option>
-              <option value="to_purchase">All rows to purchase list</option>
+              <option value="library">Library</option>
+              <option value="to_purchase">To purchase list</option>
             </select>
-            <span className="mt-1 block text-xs text-gray-500">
-              With the default, only rows where the <strong>library</strong> column
-              is <code>true</code> are added to your catalog.
-            </span>
           </label>
 
           <label className="block text-sm">
             <span className="font-medium text-gray-700">If book already exists</span>
             <select
               value={settings.duplicateMode}
-              onChange={(e) => {
-                const duplicateMode = e.target
-                  .value as BookmoryImportSettings["duplicateMode"];
+              onChange={(e) =>
                 setSettings((s) => ({
                   ...s,
-                  duplicateMode,
-                  importReadingEntries:
-                    duplicateMode === "update_goodreads_id"
-                      ? false
-                      : s.importReadingEntries,
-                }));
-              }}
+                  duplicateMode: e.target
+                    .value as BookmoryImportSettings["duplicateMode"],
+                }))
+              }
               className={`${inputClass} mt-1`}
             >
-              <option value="skip">
-                Match existing — add reading data only
-              </option>
-              <option value="overwrite">
-                Match existing — update book + reading data
-              </option>
+              <option value="skip">Skip duplicates</option>
+              <option value="overwrite">Update existing books</option>
               <option value="update_goodreads_id">
                 Match existing — update Goodreads Id only
               </option>
@@ -399,25 +367,9 @@ export function BookmoryImportPage() {
               <span className="mt-1 block text-xs text-gray-500">
                 Matches by title, ISBN, or existing Goodreads Id. Only{" "}
                 <strong>goodreadsID</strong> from the file is written — no other
-                fields or reading history.
+                fields.
               </span>
             )}
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={settings.importReadingEntries}
-              disabled={settings.duplicateMode === "update_goodreads_id"}
-              onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  importReadingEntries: e.target.checked,
-                }))
-              }
-              className="h-4 w-4 rounded border-gray-300 text-primary disabled:opacity-50"
-            />
-            Create reading history entries (status, dates, pages logged)
           </label>
 
           {settings.importAs !== "to_purchase" && (
@@ -489,7 +441,6 @@ export function BookmoryImportPage() {
             <li>Updated: {report.updated}</li>
             <li>Skipped: {report.skipped}</li>
             <li>Failed: {report.failed}</li>
-            <li>Reading entries: {report.readingEntriesCreated}</li>
           </ul>
           {report.errors.length > 0 && (
             <div className="rounded-lg border border-red-100 bg-red-50 p-4 text-sm text-red-800">

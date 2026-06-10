@@ -4,20 +4,16 @@ A personal library management web app with a public catalog and a private admin 
 
 **Stack:** React (Vite + TypeScript) · Express · PostgreSQL (Railway) · Prisma
 
-## Branches
+## What this app tracks
 
-| Branch | Contents |
-|--------|----------|
-| **`main`** | **Library tracker** — books, wishlist, authors/publishers, CSV import, stats dashboard, Goodreads tools, table sorting/column order, etc. |
-| **`reading-tracking`** | Everything on `main` **plus** a full **reading tracker** (sessions, history, re-reads, daily/weekly/monthly/annual stats). Use this branch if you want reading tracking alongside the library. |
-
-Deploy and run migrations for the branch you are on (`npx prisma migrate deploy` in `server/`).
+Each book is either **in your library** (`toPurchase: false`) or on your **wishlist / to purchase** (`toPurchase: true`). There is no reading-status workflow, bookshelf tags, or reading-session tracking — only owned vs wishlist, plus catalog metadata (authors, prices, format, Goodreads Id, etc.).
 
 ## Project structure
 
 ```
 ├── client/     # React frontend (runs locally)
 ├── server/     # Express API + Prisma (runs locally, talks to Railway DB)
+├── docs/       # GENERAL.md + DETAILED.md reference
 ├── .env.example
 └── railway.toml
 ```
@@ -89,10 +85,13 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 
 ### 5. Apply schema & seed (from your PC, via public URL)
 
+Stop any running dev server first (avoids Windows `EPERM` when Prisma replaces the query engine DLL).
+
 ```powershell
 cd server
 npm install
 npx prisma migrate deploy
+npx prisma generate
 npm run db:seed
 ```
 
@@ -136,50 +135,43 @@ The seed upserts the admin user and **updates the password hash** to match your 
 
 You can run the client before Railway is ready — the catalog page will show **API offline** until the server is up and `DATABASE_URL` is set. Full book data requires the steps above.
 
-## Implementation progress
+## Features (current)
 
-| Step | Feature | Status |
-|------|---------|--------|
-| 1 | Monorepo scaffold + Prisma schema + health check | ✅ Done |
-| 2 | Railway DB + migrate + admin seed | ✅ Done |
-| 3 | Auth API (JWT login) + protected admin routes | ✅ Done |
-| 4 | Books CRUD API + catalog UI | ✅ Done |
-| 5 | Book add/edit form + CSV import | ✅ Done |
-| 6 | Statistics dashboard | ✅ Done |
-| 7 | Authors / publishers management + mobile admin nav | ✅ Done |
-| 8 | To Purchase collection + public wishlist | ✅ Done |
-| 9 | Admin grid/table views, inline table edit, pagination | ✅ Done |
-| 10 | Goodreads cover fetch + Missing info admin page | ✅ Done |
-| 11 | Merge authors/publishers, optional wishlist author, add-to-library modal | ✅ Done |
-| 12 | Books table: sortable columns + reorderable column layout | ✅ Done |
-| 13 | Authors/Publishers: library vs wishlist tabs, sortable columns, book drill-down | ✅ Done |
-| 14 | Dashboard **Total value** (sum of market prices); **Gift?** on books | ✅ Done |
-| 15 | **Add from Goodreads** — fetch full book metadata by Id or URL | ✅ Done |
-| 16 | **Reading tracker** (sessions, history, stats) | ✅ On `reading-tracking` branch only |
-| 17 | Reading-only books, Goodreads add-to-read, session edit/delete, auto current page | ✅ On `reading-tracking` branch only |
+| Area | What you get |
+|------|----------------|
+| **Collections** | Library (`/admin/books`) vs wishlist (`/admin/to-purchase`); public catalog + public wishlist |
+| **Books** | Full CRUD, grid/table views, inline table edit, sortable/reorderable columns |
+| **Authors / publishers** | Library vs wishlist tabs, merge duplicates, book drill-down |
+| **Import** | Goodreads-style CSV, Bookmory Excel/CSV/JSON, Add from Goodreads |
+| **Tools** | Missing info (cover, ISBN-13, market price bulk fetch) |
+| **Dashboard** | KPIs, library vs wishlist chart, spending, formats, timeline (`createdAt`) |
+| **Pricing** | Purchase price, market price, savings, **Gift?** flag, **Total value** KPI |
 
-See `LIBRARY_APP_SPEC.pdf` for the full specification.
+### Removed (no longer in this app)
+
+- Reading tracker (sessions, history, goals, reading-only books)
+- Reading status (`TO_READ`, `READING`, `READ`, …)
+- Bookshelves / shelf tags
+- `dateAdded`, `dateStartedReading`, `dateFinishedReading` on books
+
+See `docs/GENERAL.md` for a full feature tour and `docs/DETAILED.md` for file-level reference.
 
 ### Admin highlights
 
-- **Grouped sidebar** — collapsible sections (Main, Library, Catalog, Import, Tools, Settings); active section opens automatically
-- **Arabic-insensitive search** — catalog and admin search ignore tashkeel and hamza variants (e.g. `رجلا` matches `رجلاً`)
-- **Books** and **To Purchase** default to **grid view** (switch to **table** for inline editing, **sortable headers**, and **Columns** to reorder fields)
-- **Add from Goodreads** (`/admin/from-goodreads`) — enter Book Id or URL; preview metadata; add to library or wishlist (description not saved to notes)
-- **Missing info** (`/admin/missing-info`) — books missing cover, ISBN-13, and/or market price; fetch cover and ISBN-13 from Goodreads, market price from [عصير الكتب](https://www.aseeralkotb.com/) (10% discount); server bulk with live progress
-- **Import from Bookmory** (`/admin/import/bookmory`) — Excel/CSV/JSON preview; optional **`goodreadsID`** column; **update Goodreads Id only** duplicate mode
-- **Books table** — **Goodreads Id** column (inline edit, sortable)
-- **Fetch cover** on the book form uses the same Goodreads Book Id field
-- **Authors / Publishers** — **My library** / **To purchase** tabs; click a name or book count to see linked books; merge duplicates
-- **Dashboard** — **Total value** KPI (sum of market prices); **Gift?** checkbox on books (form + table)
-- **Reading** (`/admin/reading`) — on **`reading-tracking`** branch: log/edit/delete sessions, history, re-reads, period stats; track books not in library; add from Goodreads (`/admin/reading/from-goodreads`); current page = sum of logged pages
+- **Grouped sidebar** — collapsible sections (Main, Library, Catalog, Import, Tools, Settings)
+- **Arabic-insensitive search** — catalog and admin search ignore tashkeel and hamza variants
+- **Books** and **To Purchase** — grid (default) or table with inline edit, sort, column reorder
+- **Add from Goodreads** — fetch metadata by Id or URL; add to library or wishlist
+- **Missing info** — bulk Goodreads cover/ISBN + عصير الكتب market price
+- **Import from Bookmory** — preview before merge; optional Goodreads Id-only duplicate update
+- **Add to library** — modal on wishlist items (pages, author, publisher, market price required)
 
 ## Documentation
 
 | Doc | Description |
 |-----|-------------|
 | [docs/GENERAL.md](./docs/GENERAL.md) | Overview — architecture, concepts, how to run |
-| [docs/DETAILED.md](./docs/DETAILED.md) | Full reference — every route, component, file, and future-edit cookbook |
+| [docs/DETAILED.md](./docs/DETAILED.md) | Full reference — routes, components, schema, cookbooks |
 | [docs/README.md](./docs/README.md) | Documentation index |
 
 ## Publishing to GitHub
@@ -189,24 +181,6 @@ This repo is set up so **secrets stay out of git**:
 - `server/.env` and `client/.env` are in `.gitignore`
 - Only `*.env.example` files are tracked (placeholders, no real passwords)
 - See [SECURITY.md](./SECURITY.md) for the full checklist
-
-### First-time git setup
-
-```powershell
-cd my-library
-git init
-git add .
-git status
-```
-
-Verify `server/.env` does **not** appear under “Changes to be committed”. Then:
-
-```powershell
-git commit -m "Initial commit: personal library tracker"
-git branch -M main
-git remote add origin https://github.com/YOUR_USER/my-library.git
-git push -u origin main
-```
 
 ### Railway / production secrets
 

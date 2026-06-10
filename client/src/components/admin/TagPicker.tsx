@@ -79,7 +79,7 @@ export function TagPicker({
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Add bookshelf…"
+          placeholder="Add…"
           className={inputClass}
           dir="auto"
         />

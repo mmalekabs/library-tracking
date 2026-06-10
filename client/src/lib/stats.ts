@@ -5,7 +5,7 @@ export function fetchStatsOverview() {
 }
 
 export function fetchStatsReading() {
-  return apiFetch<ReadingStats>("/admin/stats/reading");
+  return apiFetch<CollectionStats>("/admin/stats/reading");
 }
 
 export function fetchStatsSpending() {
@@ -28,10 +28,6 @@ export function fetchStatsTimeline() {
   return apiFetch<TimelineStats>("/admin/stats/timeline");
 }
 
-export function fetchStatsBookshelves() {
-  return apiFetch<BookshelfStat[]>("/admin/stats/bookshelves");
-}
-
 export function fetchStatsPages() {
   return apiFetch<PagesStats>("/admin/stats/pages");
 }
@@ -50,11 +46,11 @@ export interface OverviewStats {
   medianPrice: number | null;
   totalAuthors: number;
   totalPublishers: number;
-  booksRead: number;
+  libraryBooks: number;
+  wishlistBooks: number;
   publicBooks: number;
   hiddenBooks: number;
   booksAddedThisMonth: number;
-  byStatus: Record<string, number>;
   byFormat: Record<string, number>;
   avgPagesPerBook: number | null;
   avgSpentPerBook: number | null;
@@ -62,8 +58,13 @@ export interface OverviewStats {
   booksWithMarketPrice: number;
 }
 
-export interface ReadingStats {
-  breakdown: { status: string; count: number; percentage: number }[];
+export interface CollectionStats {
+  breakdown: {
+    key: string;
+    label: string;
+    count: number;
+    percentage: number;
+  }[];
   total: number;
 }
 
@@ -102,12 +103,6 @@ export interface TimelineStats {
   newestBook: { title: string; year: number } | null;
 }
 
-export interface BookshelfStat {
-  id: string;
-  name: string;
-  bookCount: number;
-}
-
 export interface PagesStats {
   histogram: { bucket: string; count: number }[];
   longestBook: { title: string; pages: number } | null;
@@ -119,8 +114,13 @@ export interface PagesStats {
 }
 
 export interface ListsStats {
-  recentlyAdded: { id: string; title: string; dateAdded: string; author: { name: string } }[];
-  currentlyReading: { id: string; title: string; dateStartedReading: string | null; author: { name: string } }[];
+  recentlyAdded: {
+    id: string;
+    title: string;
+    createdAt: string;
+    author: { name: string } | null;
+  }[];
+  wishlist: { id: string; title: string; author: { name: string } | null }[];
   withoutMarketPrice: { count: number; books: { id: string; title: string; author: { name: string } }[] };
   withoutPages: { count: number; books: { id: string; title: string; author: { name: string } }[] };
   withoutCover: { count: number; books: { id: string; title: string; author: { name: string } }[] };

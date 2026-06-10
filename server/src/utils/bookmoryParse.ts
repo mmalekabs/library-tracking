@@ -1,7 +1,15 @@
 import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import type { BookFormat, ReadingStatus } from "@prisma/client";
+import type { BookFormat } from "@prisma/client";
+
+/** Parsed from Bookmory exports; not stored on books anymore. */
+type ParsedBookStatus =
+  | "TO_READ"
+  | "READING"
+  | "READ"
+  | "DID_NOT_FINISH"
+  | "ON_HOLD";
 
 export type BookmoryField =
   | "title"
@@ -146,7 +154,7 @@ export interface ParsedBookmoryRow {
   publisher: string | null;
   numberOfPages: number | null;
   yearPublished: number | null;
-  status: ReadingStatus;
+  status: ParsedBookStatus;
   rating: number | null;
   dateAdded: Date | null;
   dateStarted: Date | null;
@@ -354,7 +362,7 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
-function mapBookmoryStatus(raw: string): ReadingStatus {
+function mapBookmoryStatus(raw: string): ParsedBookStatus {
   const s = raw.trim().toLowerCase();
   if (!s) return "TO_READ";
 

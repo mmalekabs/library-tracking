@@ -1,13 +1,6 @@
 import { z } from "zod";
 
 const bookFormatEnum = z.enum(["PHYSICAL", "DIGITAL", "AUDIO"]);
-const readingStatusEnum = z.enum([
-  "TO_READ",
-  "READING",
-  "READ",
-  "DID_NOT_FINISH",
-  "ON_HOLD",
-]);
 const bindingTypeEnum = z.enum([
   "PAPERBACK",
   "HARDCOVER",
@@ -36,26 +29,14 @@ const optionalInt = z
     return Number.isNaN(num) ? null : num;
   });
 
-const optionalDate = z
-  .union([z.string(), z.date()])
-  .optional()
-  .nullable()
-  .transform((val) => {
-    if (val === null || val === undefined || val === "") return null;
-    const date = val instanceof Date ? val : new Date(val);
-    return Number.isNaN(date.getTime()) ? null : date;
-  });
-
 export const bookListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   format: bookFormatEnum.optional(),
-  status: readingStatusEnum.optional(),
   binding: bindingTypeEnum.optional(),
   authorId: z.string().optional(),
   publisherId: z.string().optional(),
-  bookshelfId: z.string().optional(),
   minPrice: z.coerce.number().optional(),
   maxPrice: z.coerce.number().optional(),
   minPages: z.coerce.number().int().optional(),
@@ -67,7 +48,6 @@ export const bookListQuerySchema = z.object({
       "title",
       "author",
       "publisher",
-      "status",
       "format",
       "binding",
       "purchasePrice",
@@ -79,15 +59,14 @@ export const bookListQuerySchema = z.object({
       "externalId",
       "isPubliclyVisible",
       "isGift",
-      "dateAdded",
       "createdAt",
     ])
-    .default("dateAdded"),
+    .default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
   visibility: z.enum(["all", "public", "hidden"]).optional(),
   /** library = owned books only; to_purchase = wishlist only */
   collection: z
-    .enum(["library", "to_purchase", "reading_only", "all"])
+    .enum(["library", "to_purchase", "all"])
     .default("library"),
   /** Filter by record creation date (YYYY-MM-DD), inclusive */
   createdFrom: z.string().optional(),
@@ -110,10 +89,6 @@ const bookFieldsSchema = z.object({
   yearPublished: optionalInt,
   originalPublicationYear: optionalInt,
   edition: z.string().optional().nullable(),
-  status: readingStatusEnum.default("TO_READ"),
-  dateAdded: optionalDate,
-  dateStartedReading: optionalDate,
-  dateFinishedReading: optionalDate,
   isPubliclyVisible: z.boolean().default(true),
   isGift: z.boolean().default(false),
   toPurchase: z.boolean().default(false),
@@ -129,8 +104,6 @@ const bookFieldsSchema = z.object({
   additionalAuthorNames: z.array(z.string()).optional().default([]),
   publisherId: z.string().optional().nullable(),
   publisherName: z.string().optional().nullable(),
-  bookshelfIds: z.array(z.string()).optional().default([]),
-  bookshelfNames: z.array(z.string()).optional().default([]),
 });
 
 export const createBookSchema = bookFieldsSchema.refine(

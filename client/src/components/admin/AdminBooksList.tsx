@@ -70,7 +70,7 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [visibility, setVisibility] = useState<"all" | "public" | "hidden">("all");
   const [moveToLibraryBook, setMoveToLibraryBook] = useState<Book | null>(null);
-  const [sortBy, setSortBy] = useState<BookSortBy>("dateAdded");
+  const [sortBy, setSortBy] = useState<BookSortBy>("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [columnOrder, setColumnOrder] = useState(loadBookTableColumnOrder);
   const [columnsModalOpen, setColumnsModalOpen] = useState(false);

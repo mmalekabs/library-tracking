@@ -3,17 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ImageDown } from "lucide-react";
 import toast from "react-hot-toast";
-import type { Book, BookFormat, BindingType, ReadingStatus } from "@/types";
+import type { Book, BookFormat, BindingType } from "@/types";
 import {
   FORMAT_OPTIONS,
   BINDING_OPTIONS,
-  STATUS_OPTIONS,
   CURRENCY_OPTIONS,
 } from "@/constants/book";
 import {
   fetchAdminAuthors,
   fetchAdminPublishers,
-  fetchAdminBookshelves,
 } from "@/lib/lookup";
 import { createBook, updateBook, deleteBook } from "@/lib/books";
 import { fetchGoodreadsCover } from "@/lib/goodreads";
@@ -47,25 +45,11 @@ interface FormState {
   purchasePrice: string;
   marketPrice: string;
   currency: string;
-  status: ReadingStatus;
-  dateAdded: string;
-  dateStartedReading: string;
-  dateFinishedReading: string;
-  bookshelves: { id: string; name: string }[];
   isPubliclyVisible: boolean;
   isGift: boolean;
   toPurchase: boolean;
   coverImageUrl: string;
   notes: string;
-}
-
-function toDateInput(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
-
-function todayInput(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function bookToFormState(book: Book): FormState {
@@ -93,14 +77,6 @@ function bookToFormState(book: Book): FormState {
     purchasePrice: book.purchasePrice?.toString() ?? "",
     marketPrice: book.marketPrice?.toString() ?? "",
     currency: book.currency ?? "SAR",
-    status: book.status,
-    dateAdded: toDateInput(book.dateAdded),
-    dateStartedReading: toDateInput(book.dateStartedReading),
-    dateFinishedReading: toDateInput(book.dateFinishedReading),
-    bookshelves: (book.bookshelves ?? []).map((s) => ({
-      id: s.id,
-      name: s.name,
-    })),
     isPubliclyVisible: book.isPubliclyVisible ?? true,
     isGift: book.isGift ?? false,
     toPurchase: book.toPurchase ?? false,
@@ -126,11 +102,6 @@ const emptyForm = (toPurchase = false): FormState => ({
   purchasePrice: "",
   marketPrice: "",
   currency: "SAR",
-  status: "TO_READ",
-  dateAdded: todayInput(),
-  dateStartedReading: "",
-  dateFinishedReading: "",
-  bookshelves: [],
   isPubliclyVisible: true,
   isGift: false,
   toPurchase,
@@ -155,21 +126,11 @@ function formToPayload(form: FormState): Record<string, unknown> {
     purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : null,
     marketPrice: form.marketPrice ? Number(form.marketPrice) : null,
     currency: form.currency,
-    status: form.status,
-    dateAdded: form.dateAdded ? new Date(form.dateAdded).toISOString() : undefined,
-    dateStartedReading: form.dateStartedReading
-      ? new Date(form.dateStartedReading).toISOString()
-      : null,
-    dateFinishedReading: form.dateFinishedReading
-      ? new Date(form.dateFinishedReading).toISOString()
-      : null,
     isPubliclyVisible: form.isPubliclyVisible,
     isGift: form.isGift,
     toPurchase: form.toPurchase,
     coverImageUrl: form.coverImageUrl.trim() || null,
     notes: form.notes.trim() || null,
-    bookshelfIds: form.bookshelves.filter((s) => s.id).map((s) => s.id),
-    bookshelfNames: form.bookshelves.filter((s) => !s.id).map((s) => s.name),
     additionalAuthorIds: form.additionalAuthors
       .filter((a) => a.id)
       .map((a) => a.id),
@@ -361,7 +322,7 @@ export function BookForm({
             ))}
           </select>
         </FormField>
-        <FormField label="Number of pages">
+        <FormField label="Pages">
           <input
             type="number"
             min={0}
@@ -512,51 +473,7 @@ export function BookForm({
         </div>
       </FormSection>
 
-      <FormSection title="Status & organization">
-        <FormField label="Reading status">
-          <select
-            value={form.status}
-            onChange={(e) => set("status", e.target.value as ReadingStatus)}
-            className={inputClass}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Date added">
-          <input
-            type="date"
-            value={form.dateAdded}
-            onChange={(e) => set("dateAdded", e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-        <FormField label="Date started reading">
-          <input
-            type="date"
-            value={form.dateStartedReading}
-            onChange={(e) => set("dateStartedReading", e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-        <FormField label="Date finished reading">
-          <input
-            type="date"
-            value={form.dateFinishedReading}
-            onChange={(e) => set("dateFinishedReading", e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-        <TagPicker
-          label="Bookshelves"
-          tags={form.bookshelves}
-          onChange={(bookshelves) => set("bookshelves", bookshelves)}
-          queryKey="admin-bookshelves"
-          fetchFn={fetchAdminBookshelves}
-        />
+      <FormSection title="Collection">
         <div className="sm:col-span-2 space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
           <div className="flex items-center gap-3">
             <input

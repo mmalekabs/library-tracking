@@ -17,10 +17,7 @@ import { AuthorsPage } from "@/pages/admin/AuthorsPage";
 import { PublishersPage } from "@/pages/admin/PublishersPage";
 import { ToPurchasePage } from "@/pages/admin/ToPurchasePage";
 import { MissingInfoPage } from "@/pages/admin/MissingInfoPage";
-import { ReadingPage } from "@/pages/admin/ReadingPage";
-import { ReadingBookFormPage } from "@/pages/admin/ReadingBookFormPage";
 import { FromGoodreadsPage } from "@/pages/admin/FromGoodreadsPage";
-import { FromGoodreadsReadingPage } from "@/pages/admin/FromGoodreadsReadingPage";
 import { RecentAdditionsPage } from "@/pages/admin/RecentAdditionsPage";
 
 export default function App() {
@@ -58,10 +55,6 @@ export default function App() {
         <Route path="from-goodreads" element={<FromGoodreadsPage />} />
         <Route path="missing-info" element={<MissingInfoPage />} />
         <Route path="missing-covers" element={<MissingInfoPage />} />
-        <Route path="reading" element={<ReadingPage />} />
-        <Route path="reading/from-goodreads" element={<FromGoodreadsReadingPage />} />
-        <Route path="reading/books/new" element={<ReadingBookFormPage />} />
-        <Route path="reading/books/:id/edit" element={<ReadingBookFormPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
