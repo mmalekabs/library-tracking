@@ -3,9 +3,12 @@ import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { sendPaginated, sendSuccess } from "../../utils/response.js";
 import { streamNdjsonResponse } from "../../utils/streamNdjson.js";
 import * as bookService from "../../services/bookService.js";
+import * as bookExportService from "../../services/bookExportService.js";
 import type { BulkFetchProgressUpdate } from "../../services/bookService.js";
 import {
   bookListQuerySchema,
+  bookExportQuerySchema,
+  type BookExportQuery,
   bulkDeleteSchema,
   bulkFetchCoversSchema,
   bulkFetchIsbnSchema,
@@ -119,6 +122,27 @@ router.post(
     streamNdjsonResponse<unknown, BulkFetchProgressUpdate>(res, (onProgress) =>
       bookService.bulkFetchMarketPriceFromAseeralkotb(req.body, onProgress),
     );
+  }),
+);
+
+router.get(
+  "/export",
+  validateQuery(bookExportQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { collection } = (
+      req as typeof req & { validatedQuery: BookExportQuery }
+    ).validatedQuery;
+    const { buffer, filename } =
+      await bookExportService.exportBooksToXlsx(collection);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`,
+    );
+    res.send(buffer);
   }),
 );
 

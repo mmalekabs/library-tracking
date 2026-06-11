@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   ShoppingCart,
+  Tag,
   ImageOff,
   BookPlus,
   FileSpreadsheet,
@@ -48,6 +49,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: "/admin/books", label: "Books", icon: Book },
       { to: "/admin/to-purchase", label: "To Purchase", icon: ShoppingCart },
+      { to: "/admin/to-sell", label: "To Sell", icon: Tag },
     ],
   },
   {
@@ -98,6 +100,7 @@ const pageTitles: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/books": "Books",
   "/admin/to-purchase": "To Purchase",
+  "/admin/to-sell": "To Sell",
   "/admin/authors": "Authors",
   "/admin/publishers": "Publishers",
   "/admin/import": "Import CSV",

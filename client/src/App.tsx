@@ -16,6 +16,7 @@ import { BookmoryImportPage } from "@/pages/admin/BookmoryImportPage";
 import { AuthorsPage } from "@/pages/admin/AuthorsPage";
 import { PublishersPage } from "@/pages/admin/PublishersPage";
 import { ToPurchasePage } from "@/pages/admin/ToPurchasePage";
+import { ToSellPage } from "@/pages/admin/ToSellPage";
 import { MissingInfoPage } from "@/pages/admin/MissingInfoPage";
 import { FromGoodreadsPage } from "@/pages/admin/FromGoodreadsPage";
 import { RecentAdditionsPage } from "@/pages/admin/RecentAdditionsPage";
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="to-purchase" element={<ToPurchasePage />} />
         <Route path="to-purchase/new" element={<BookFormPage />} />
         <Route path="to-purchase/:id/edit" element={<BookFormPage />} />
+        <Route path="to-sell" element={<ToSellPage />} />
         <Route path="authors" element={<AuthorsPage />} />
         <Route path="publishers" element={<PublishersPage />} />
         <Route path="import" element={<ImportPage />} />

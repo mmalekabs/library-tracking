@@ -36,6 +36,7 @@ export interface Book {
   isPubliclyVisible?: boolean;
   isGift?: boolean;
   toPurchase?: boolean;
+  toSell?: boolean;
   createdAt?: string;
   updatedAt?: string;
   coverImageUrl: string | null;

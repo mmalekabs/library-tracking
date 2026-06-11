@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Columns3, Plus, Search, LayoutGrid, Table2 } from "lucide-react";
+import { Columns3, Download, Plus, Search, LayoutGrid, Table2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { BookCard } from "@/components/books/BookCard";
 import { AdminBooksTable } from "@/components/admin/AdminBooksTable";
@@ -12,7 +12,11 @@ import {
 } from "@/constants/pagination";
 import {
   fetchAdminBooks,
+  fetchToPurchaseBooks,
+  fetchToSellBooks,
+  downloadBooksExport,
   toggleBookVisibility,
+  toggleBookToSell,
   deleteBook,
   type BookSortBy,
 } from "@/lib/books";
@@ -26,8 +30,20 @@ import {
 import { ApiError } from "@/lib/api";
 import type { Book } from "@/types";
 
-type Collection = "library" | "to_purchase";
+type Collection = "library" | "to_purchase" | "to_sell";
 type ViewMode = "table" | "grid";
+
+const GRID_SORT_OPTIONS: {
+  value: `${BookSortBy}:${"asc" | "desc"}`;
+  label: string;
+}[] = [
+  { value: "createdAt:desc", label: "Date added (newest)" },
+  { value: "createdAt:asc", label: "Date added (oldest)" },
+  { value: "purchasePrice:desc", label: "Price (high → low)" },
+  { value: "purchasePrice:asc", label: "Price (low → high)" },
+  { value: "numberOfPages:desc", label: "Pages (most)" },
+  { value: "numberOfPages:asc", label: "Pages (fewest)" },
+];
 
 interface AdminBooksListProps {
   collection: Collection;
@@ -38,27 +54,56 @@ const config: Record<
   {
     title: string;
     description: string;
-    addPath: string;
-    editPath: (id: string) => string;
+    addPath?: string;
+    addLabel?: string;
     emptyMessage: string;
+    exportLabel: string;
   }
 > = {
   library: {
     title: "Books",
-    description: "Books in your library (owned or planned to read).",
+    description: "Books in your library. Mark any book for sale with the To sell action.",
     addPath: "/admin/books/new",
-    editPath: (id) => `/admin/books/${id}/edit`,
+    addLabel: "Add book",
     emptyMessage: "No books in your library yet.",
+    exportLabel: "Library export downloaded",
   },
   to_purchase: {
     title: "To Purchase",
     description:
       "Books you want to buy. Use Show/Hide to control the public wishlist at /to-purchase.",
     addPath: "/admin/to-purchase/new",
-    editPath: (id) => `/admin/to-purchase/${id}/edit`,
+    addLabel: "Add to list",
     emptyMessage: "No books on your purchase list yet.",
+    exportLabel: "To purchase export downloaded",
+  },
+  to_sell: {
+    title: "To Sell",
+    description:
+      "Books you've marked for sale. Toggle from Books, To Purchase, or this list.",
+    emptyMessage: "No books marked for sale yet.",
+    exportLabel: "To sell export downloaded",
   },
 };
+
+function resolveEditPath(book: Book): string {
+  return book.toPurchase
+    ? `/admin/to-purchase/${book.id}/edit`
+    : `/admin/books/${book.id}/edit`;
+}
+
+function fetchBooksForCollection(
+  collection: Collection,
+  params: Parameters<typeof fetchAdminBooks>[0],
+) {
+  if (collection === "to_purchase") {
+    return fetchToPurchaseBooks(params);
+  }
+  if (collection === "to_sell") {
+    return fetchToSellBooks(params);
+  }
+  return fetchAdminBooks(params);
+}
 
 export function AdminBooksList({ collection }: AdminBooksListProps) {
   const cfg = config[collection];
@@ -74,11 +119,18 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [columnOrder, setColumnOrder] = useState(loadBookTableColumnOrder);
   const [columnsModalOpen, setColumnsModalOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const tableColumns = useMemo(
     () => getBookTableColumnsForOrder(columnOrder),
     [columnOrder],
   );
+
+  const gridSortValue = GRID_SORT_OPTIONS.some(
+    (o) => o.value === `${sortBy}:${sortOrder}`,
+  )
+    ? `${sortBy}:${sortOrder}`
+    : "createdAt:desc";
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -88,6 +140,15 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
       () => setDebouncedSearch(value),
       300,
     );
+  };
+
+  const listParams = {
+    page,
+    limit: pageSize,
+    search: debouncedSearch || undefined,
+    visibility,
+    sortBy,
+    sortOrder,
   };
 
   const { data, isLoading } = useQuery({
@@ -102,16 +163,7 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
       sortBy,
       sortOrder,
     ],
-    queryFn: () =>
-      fetchAdminBooks({
-        page,
-        limit: pageSize,
-        search: debouncedSearch || undefined,
-        visibility,
-        collection,
-        sortBy,
-        sortOrder,
-      }),
+    queryFn: () => fetchBooksForCollection(collection, listParams),
   });
 
   const handleSort = (field: BookSortBy) => {
@@ -130,6 +182,17 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books"] });
       toast.success("Visibility updated");
+    },
+    onError: (err) =>
+      toast.error(err instanceof ApiError ? err.message : "Update failed"),
+  });
+
+  const toSellMutation = useMutation({
+    mutationFn: ({ id, toSell }: { id: string; toSell: boolean }) =>
+      toggleBookToSell(id, toSell),
+    onSuccess: (_data, { toSell }) => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      toast.success(toSell ? "Marked for sale" : "Removed from sell list");
     },
     onError: (err) =>
       toast.error(err instanceof ApiError ? err.message : "Update failed"),
@@ -159,6 +222,18 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
     setPage(1);
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadBooksExport(collection);
+      toast.success(cfg.exportLabel);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -166,13 +241,26 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           <h2 className="text-2xl font-bold text-gray-900">{cfg.title}</h2>
           <p className="mt-1 text-sm text-gray-600">{cfg.description}</p>
         </div>
-        <Link
-          to={cfg.addPath}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          {collection === "to_purchase" ? "Add to list" : "Add book"}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden />
+            {exporting ? "Exporting…" : "Download Excel"}
+          </button>
+          {cfg.addPath && (
+            <Link
+              to={cfg.addPath}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              {cfg.addLabel}
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-4">
@@ -201,6 +289,28 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           <option value="public">Public only</option>
           <option value="hidden">Hidden only</option>
         </select>
+        {viewMode === "grid" && (
+          <select
+            value={gridSortValue}
+            onChange={(e) => {
+              const [field, order] = e.target.value.split(":") as [
+                BookSortBy,
+                "asc" | "desc",
+              ];
+              setSortBy(field);
+              setSortOrder(order);
+              setPage(1);
+            }}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            aria-label="Sort grid"
+          >
+            {GRID_SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        )}
         {viewMode === "table" && (
           <button
             type="button"
@@ -257,7 +367,7 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
           sortBy={sortBy}
           sortOrder={sortOrder}
           onSort={handleSort}
-          editPath={cfg.editPath}
+          editPath={resolveEditPath}
           onDelete={handleDelete}
           onMoveToLibrary={
             collection === "to_purchase"
@@ -276,11 +386,16 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
                   To purchase
                 </span>
               )}
+              {collection === "to_sell" && (
+                <span className="absolute right-2 top-2 z-10 rounded-full bg-violet-600 px-2 py-0.5 text-xs font-medium text-white">
+                  For sale
+                </span>
+              )}
               <div className="flex-1">
                 <BookCard
                   book={book}
                   admin
-                  detailPath={cfg.editPath(book.id)}
+                  detailPath={resolveEditPath(book)}
                 />
               </div>
               <div className="mt-2 flex shrink-0 flex-wrap gap-2">
@@ -301,6 +416,22 @@ export function AdminBooksList({ collection }: AdminBooksListProps) {
                     : collection === "to_purchase"
                       ? "Show on public wishlist"
                       : "Show"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    toSellMutation.mutate({
+                      id: book.id,
+                      toSell: !(book.toSell ?? false),
+                    })
+                  }
+                  className={`flex-1 rounded border px-2 py-1 text-xs ${
+                    book.toSell
+                      ? "border-violet-300 text-violet-700 hover:bg-violet-50"
+                      : "border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {book.toSell ? "Remove from sell" : "Mark to sell"}
                 </button>
                 {collection === "to_purchase" && (
                   <button

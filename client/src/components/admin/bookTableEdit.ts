@@ -22,7 +22,8 @@ export type BookTableField =
   | "edition"
   | "currency"
   | "isPubliclyVisible"
-  | "isGift";
+  | "isGift"
+  | "toSell";
 
 export const BOOK_TABLE_COLUMNS = [
   { key: "title", label: "Title", minWidth: "12rem" },
@@ -39,6 +40,7 @@ export const BOOK_TABLE_COLUMNS = [
   { key: "goodreadsId", label: "Goodreads Id", minWidth: "6rem" },
   { key: "isPubliclyVisible", label: "Public", minWidth: "4rem" },
   { key: "isGift", label: "Gift?", minWidth: "4rem" },
+  { key: "toSell", label: "To sell?", minWidth: "5rem" },
 ] as const satisfies readonly {
   key: BookTableField;
   label: string;
@@ -63,6 +65,7 @@ export const BOOK_TABLE_SORT_BY: Record<BookTableColumnField, BookSortBy> = {
   goodreadsId: "externalId",
   isPubliclyVisible: "isPubliclyVisible",
   isGift: "isGift",
+  toSell: "toSell",
 };
 
 export const BOOK_TABLE_FIELD_LABELS: Record<BookTableField, string> =
@@ -104,6 +107,8 @@ export function getBookFieldDisplay(book: Book, field: BookTableField): string {
       return book.isPubliclyVisible ? "Yes" : "No";
     case "isGift":
       return book.isGift ? "Yes" : "No";
+    case "toSell":
+      return book.toSell ? "Yes" : "No";
     default:
       return "";
   }
@@ -120,6 +125,8 @@ export function getBookFieldRaw(book: Book, field: BookTableField): string {
       return book.isPubliclyVisible ? "true" : "false";
     case "isGift":
       return book.isGift ? "true" : "false";
+    case "toSell":
+      return book.toSell ? "true" : "false";
     default:
       return getBookFieldDisplay(book, field);
   }
@@ -137,7 +144,7 @@ export function normalizeFieldValue(field: BookTableField, raw: string): string 
     const n = Number.parseInt(trimmed, 10);
     return Number.isNaN(n) ? trimmed : String(n);
   }
-  if (field === "isPubliclyVisible" || field === "isGift") {
+  if (field === "isPubliclyVisible" || field === "isGift" || field === "toSell") {
     return raw === "true" ? "true" : "false";
   }
   return trimmed;
@@ -198,6 +205,8 @@ export function buildBookFieldPayload(
       return { isPubliclyVisible: raw === "true" };
     case "isGift":
       return { isGift: raw === "true" };
+    case "toSell":
+      return { toSell: raw === "true" };
     default:
       return {};
   }
@@ -209,7 +218,8 @@ export function fieldUsesSelect(field: BookTableField): boolean {
     field === "binding" ||
     field === "currency" ||
     field === "isPubliclyVisible" ||
-    field === "isGift"
+    field === "isGift" ||
+    field === "toSell"
   );
 }
 
@@ -223,6 +233,7 @@ export function getSelectOptions(field: BookTableField) {
       return CURRENCY_OPTIONS.map((c) => ({ value: c, label: c }));
     case "isPubliclyVisible":
     case "isGift":
+    case "toSell":
       return [
         { value: "true", label: "Yes" },
         { value: "false", label: "No" },

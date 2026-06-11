@@ -71,6 +71,7 @@ model Book {
   isPubliclyVisible Boolean @default(true)
   isGift            Boolean @default(false)
   toPurchase        Boolean @default(false)
+  toSell            Boolean @default(false)
   coverImageUrl     String?
   notes             String?
 
@@ -88,6 +89,7 @@ model Book {
   @@index([format])
   @@index([isPubliclyVisible])
   @@index([toPurchase])
+  @@index([toSell])
   @@index([authorId])
   @@index([publisherId])
 }

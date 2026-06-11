@@ -59,14 +59,15 @@ export const bookListQuerySchema = z.object({
       "externalId",
       "isPubliclyVisible",
       "isGift",
+      "toSell",
       "createdAt",
     ])
     .default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
   visibility: z.enum(["all", "public", "hidden"]).optional(),
-  /** library = owned books only; to_purchase = wishlist only */
+  /** library = owned; to_purchase = wishlist; to_sell = marked for sale */
   collection: z
-    .enum(["library", "to_purchase", "all"])
+    .enum(["library", "to_purchase", "to_sell", "all"])
     .default("library"),
   /** Filter by record creation date (YYYY-MM-DD), inclusive */
   createdFrom: z.string().optional(),
@@ -74,6 +75,12 @@ export const bookListQuerySchema = z.object({
 });
 
 export type BookListQuery = z.infer<typeof bookListQuerySchema>;
+
+export const bookExportQuerySchema = z.object({
+  collection: z.enum(["library", "to_purchase", "to_sell"]),
+});
+
+export type BookExportQuery = z.infer<typeof bookExportQuerySchema>;
 
 const bookFieldsSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -92,6 +99,7 @@ const bookFieldsSchema = z.object({
   isPubliclyVisible: z.boolean().default(true),
   isGift: z.boolean().default(false),
   toPurchase: z.boolean().default(false),
+  toSell: z.boolean().default(false),
   coverImageUrl: z
     .string()
     .optional()

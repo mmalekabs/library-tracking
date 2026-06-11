@@ -43,11 +43,11 @@ type BookTableColumn = {
 interface AdminBooksTableProps {
   books: Book[];
   columns: BookTableColumn[];
-  collection: "library" | "to_purchase";
+  collection: "library" | "to_purchase" | "to_sell";
   sortBy: BookSortBy;
   sortOrder: "asc" | "desc";
   onSort: (field: BookSortBy) => void;
-  editPath: (id: string) => string;
+  editPath: (book: Book) => string;
   onDelete: (book: Book) => void;
   onMoveToLibrary?: (book: Book) => void;
 }
@@ -114,7 +114,7 @@ export function AdminBooksTable({
         newRaw: normalizedNew,
         oldDisplay: getBookFieldDisplay(book, field),
         newDisplay:
-          field === "isPubliclyVisible" || field === "isGift"
+          field === "isPubliclyVisible" || field === "isGift" || field === "toSell"
             ? normalizedNew === "true"
               ? "Yes"
               : "No"
@@ -288,7 +288,7 @@ export function AdminBooksTable({
                 <td className="sticky right-0 whitespace-nowrap bg-white px-2 py-1.5">
                   <div className="flex items-center gap-1">
                     <Link
-                      to={editPath(book.id)}
+                      to={editPath(book)}
                       className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-primary"
                       title="Full edit"
                     >

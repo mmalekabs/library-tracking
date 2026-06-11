@@ -6,7 +6,7 @@ A personal library management web app with a public catalog and a private admin 
 
 ## What this app tracks
 
-Each book is either **in your library** (`toPurchase: false`) or on your **wishlist / to purchase** (`toPurchase: true`). There is no reading-status workflow, bookshelf tags, or reading-session tracking — only owned vs wishlist, plus catalog metadata (authors, prices, format, Goodreads Id, etc.).
+Each book is either **in your library** (`toPurchase: false`) or on your **wishlist** (`toPurchase: true`). You can also mark any book **to sell** (`toSell: true`) for a separate admin list. There is no reading-status workflow, bookshelf tags, or reading-session tracking — only owned vs wishlist vs for-sale, plus catalog metadata (authors, prices, format, Goodreads Id, etc.).
 
 ## Project structure
 
@@ -139,8 +139,9 @@ You can run the client before Railway is ready — the catalog page will show **
 
 | Area | What you get |
 |------|----------------|
-| **Collections** | Library (`/admin/books`) vs wishlist (`/admin/to-purchase`); public catalog + public wishlist |
-| **Books** | Full CRUD, grid/table views, inline table edit, sortable/reorderable columns |
+| **Collections** | Library (`/admin/books`), wishlist (`/admin/to-purchase`), **to sell** (`/admin/to-sell`); public catalog + public wishlist |
+| **Books** | Full CRUD, grid/table views, inline table edit, sortable/reorderable columns, **grid sort** (price, pages, date) |
+| **Export** | Download all books as **Excel** per collection (library, to purchase, to sell) |
 | **Authors / publishers** | Library vs wishlist tabs, merge duplicates, book drill-down |
 | **Import** | Goodreads-style CSV, Bookmory Excel/CSV/JSON, Add from Goodreads |
 | **Tools** | Missing info (cover, ISBN-13, market price bulk fetch) |
@@ -160,7 +161,9 @@ See `docs/GENERAL.md` for a full feature tour and `docs/DETAILED.md` for file-le
 
 - **Grouped sidebar** — collapsible sections (Main, Library, Catalog, Import, Tools, Settings)
 - **Arabic-insensitive search** — catalog and admin search ignore tashkeel and hamza variants
-- **Books** and **To Purchase** — grid (default) with **uniform card sizes**, or table with inline edit, sort, column reorder
+- **Books**, **To Purchase**, and **To Sell** — grid (default) with **uniform card sizes** and **sort dropdown** (price, pages, date), or table with inline edit, column headers sort, column reorder
+- **To Sell** — mark books via table **To sell?** column, grid **Mark to sell** button, or book form checkbox; books stay in library/wishlist lists
+- **Download Excel** — export full library, wishlist, or to-sell list from each admin page
 - **Public catalog / wishlist** — same `BookCard` grid layout as admin (consistent card height per row)
 - **Add from Goodreads** — fetch metadata by Id or URL; add to library or wishlist
 - **Missing info** — bulk Goodreads cover/ISBN + عصير الكتب market price

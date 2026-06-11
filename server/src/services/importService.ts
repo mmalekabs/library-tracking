@@ -85,6 +85,7 @@ function rowToBookInput(
     isPubliclyVisible: settings.defaultVisibility,
     isGift: false,
     toPurchase: settings.defaultToPurchase,
+    toSell: false,
     coverImageUrl: null,
     notes: null,
     edition: null,

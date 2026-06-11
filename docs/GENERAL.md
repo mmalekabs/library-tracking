@@ -52,16 +52,24 @@ There is **no root `package.json`**. Install and run `client` and `server` separ
 
 ## Main concepts
 
-### Two book collections
+### Library vs wishlist vs to sell
 
-Every book row has a boolean **`toPurchase`**:
+**Owned vs wishlist** — boolean **`toPurchase`**:
 
 | Collection | `toPurchase` | Admin page | Public page |
 |------------|--------------|------------|-------------|
 | **Library** (owned) | `false` | `/admin/books` | `/` (catalog) |
 | **To purchase** (wishlist) | `true` | `/admin/to-purchase` | `/to-purchase` |
 
-A book is in **one** collection at a time. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then sets `toPurchase: false`.
+A book is in **one** of these at a time. **Add to library** on a wishlist item opens a modal (pages, author, publisher, market price required; purchase price optional), then sets `toPurchase: false`.
+
+**To sell** — separate boolean **`toSell`** (orthogonal to library/wishlist):
+
+| List | `toSell` | Admin page |
+|------|----------|------------|
+| **To sell** | `true` | `/admin/to-sell` |
+
+A library book can also be marked for sale (`toSell: true`) and still appear under **Books**. Toggle from the table **To sell?** column, grid **Mark to sell** button, or the book form.
 
 Wishlist books may be saved **without an author**; author is required when adding to the library or when saving a library book.
 
@@ -105,7 +113,7 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 | Group | Pages |
 |-------|--------|
 | **Main** | Dashboard |
-| **Library** | Books, To Purchase |
+| **Library** | Books, To Purchase, To Sell |
 | **Catalog** | Authors, Publishers |
 | **Import** | CSV import, From Bookmory, From Goodreads, Recent additions |
 | **Tools** | Missing info |
@@ -118,6 +126,7 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 | **Dashboard** | Charts and KPIs (library vs wishlist, spending, **total value**, formats, timeline by `createdAt`, etc.) |
 | **Books** | Library collection — grid or **table** with inline edit, **sortable columns**, **column reorder** |
 | **To Purchase** | Wishlist — same UI patterns as Books |
+| **To Sell** | Books marked `toSell: true` — same grid/table UI; no separate “add” (mark from other lists) |
 | **Authors** | **My library** / **To purchase** tabs; sortable columns; click name/count → books modal; **merge** duplicates |
 | **Publishers** | Same as authors (including merge) |
 | **Import CSV** | Bulk import (Goodreads-style CSV) |
@@ -126,17 +135,18 @@ Login at `/admin/login`. The sidebar uses **collapsible groups** (active group o
 | **Missing info** | Books missing cover, ISBN-13, and/or market price; bulk fetch from Goodreads and عصير الكتب |
 | **Recent additions** | Books sorted by `createdAt` |
 
-**Books / To Purchase UI:**
+**Books / To Purchase / To Sell UI:**
 
-- **Grid view** (default): shared **`BookCard`** component with **uniform height** per row (fixed cover ratio, reserved title/metadata slots); admin action buttons sit below the card. Cards show purchase price and rounded savings on admin grids only.
-- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in browser localStorage); includes **Goodreads Id**; click a cell to edit
-- **Gift?** column — mark books received as gifts (also on book form under Pricing)
+- **Grid view** (default): shared **`BookCard`** with **uniform height**; action buttons below each card (**Hide**, **Mark to sell** / **Remove from sell**, **Delete**; wishlist also has **Add to library**). **Sort** dropdown: date added, purchase price, page count (server-side).
+- **Table view**: click column headers to **sort** (server-side); **Columns** button to **reorder** fields (saved in `localStorage`); includes **Goodreads Id**, **Gift?**, **To sell?**; click a cell to edit
+- **Download Excel** — exports **all** books in the current collection (not just the visible page)
 - Pagination: 10 / 25 / 50 / 75 / 100 rows per page
 
 **Book form — Collection section:**
 
-- Single checkbox: **To purchase (wishlist)** — unchecked = in library
-- **Publicly visible** checkbox (catalog vs wishlist page depending on collection)
+- **To purchase (wishlist)** — unchecked = in library
+- **To sell** — appears on admin To Sell list when checked
+- **Publicly visible** — catalog vs wishlist page depending on `toPurchase`
 
 **Add to library (To Purchase):**
 
@@ -243,6 +253,9 @@ Secrets live in **Railway Variables**, not in git. See [SECURITY.md](../SECURITY
 | 19 | Arabic-insensitive search; grouped collapsible admin sidebar |
 | 20 | **Simplification** — removed reading tracker, reading status, bookshelves, reading dates; library vs wishlist only |
 | 21 | **Rounded savings** (integer only, no decimals) + **uniform book cards** in public and admin grid views |
+| 22 | **Excel export** — download library, to purchase, or to sell as `.xlsx` |
+| 23 | **To Sell** list — `toSell` flag; table column + grid toggle + form checkbox |
+| 24 | **Grid sort** dropdown — price, pages, date added (server-side) |
 
 For file-level detail on any phase, see [DETAILED.md](./DETAILED.md).
 

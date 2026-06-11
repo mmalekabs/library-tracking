@@ -27,6 +27,7 @@ export type BookSortBy =
   | "externalId"
   | "isPubliclyVisible"
   | "isGift"
+  | "toSell"
   | "createdAt";
 
 export interface BookListParams {
@@ -40,7 +41,7 @@ export interface BookListParams {
   sortBy?: BookSortBy;
   sortOrder?: "asc" | "desc";
   visibility?: "all" | "public" | "hidden";
-  collection?: "library" | "to_purchase" | "all";
+  collection?: "library" | "to_purchase" | "to_sell" | "all";
   createdFrom?: string;
   createdTo?: string;
 }
@@ -108,6 +109,66 @@ export function fetchToPurchaseBooks(params?: Omit<BookListParams, "collection">
     collection: "to_purchase",
     ...params,
   });
+}
+
+export function fetchToSellBooks(params?: Omit<BookListParams, "collection">) {
+  return fetchBookList("/admin/books", {
+    collection: "to_sell",
+    ...params,
+  });
+}
+
+export function toggleBookToSell(id: string, toSell: boolean) {
+  return updateBook(id, { toSell });
+}
+
+function parseContentDispositionFilename(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename="([^"]+)"/i.exec(header);
+  return match?.[1] ?? null;
+}
+
+/** Download all books in a collection as .xlsx. */
+export async function downloadBooksExport(
+  collection: "library" | "to_purchase" | "to_sell",
+): Promise<void> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const headers: HeadersInit = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(
+    `${API_BASE}/admin/books/export?collection=${encodeURIComponent(collection)}`,
+    { headers },
+  );
+
+  if (!response.ok) {
+    let message = "Export failed";
+    try {
+      const json = await response.json();
+      message = json.error?.message ?? message;
+    } catch {
+      // binary or empty body
+    }
+    throw new ApiError("EXPORT_FAILED", message, response.status);
+  }
+
+  const blob = await response.blob();
+  const filename =
+    parseContentDispositionFilename(
+      response.headers.get("Content-Disposition"),
+    ) ??
+    (collection === "library"
+      ? "library-books.xlsx"
+      : collection === "to_purchase"
+        ? "to-purchase-books.xlsx"
+        : "to-sell-books.xlsx");
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export interface MoveToLibraryInput {

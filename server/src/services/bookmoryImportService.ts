@@ -310,6 +310,7 @@ export async function importBookmoryFile(
         isPubliclyVisible: flags.isPubliclyVisible,
         isGift: false,
         toPurchase: flags.toPurchase || row.toPurchase,
+        toSell: false,
         purchasePrice: row.purchasePrice,
         marketPrice: null,
         coverImageUrl: row.coverImageUrl,

@@ -36,6 +36,8 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 26. [Gift field and Total value KPI](#26-gift-field-and-total-value-kpi)
 27. [Import from Bookmory](#27-import-from-bookmory)
 28. [Arabic-insensitive search](#28-arabic-insensitive-search)
+29. [Excel export](#29-excel-export)
+30. [To Sell list](#30-to-sell-list)
 
 ---
 
@@ -79,6 +81,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `src/services/aseeralkotbService.ts` | Scrape عصير الكتب for market price |
 | `src/services/entityListUtils.ts` | Shared entity list filters/sort |
 | `src/services/bookService.ts` | Core book logic, serialization, filters |
+| `src/services/bookExportService.ts` | Excel (`.xlsx`) export per collection |
 | `src/services/authorService.ts` | Author CRUD + merge |
 | `src/services/publisherService.ts` | Publisher CRUD + merge |
 | `src/services/lookupService.ts` | Lightweight lists for pickers |
@@ -202,12 +205,13 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `isPubliclyVisible` | boolean | Default `true` |
 | `isGift` | boolean | Default `false` |
 | `toPurchase` | boolean | Default `false` — **`true` = wishlist** |
+| `toSell` | boolean | Default `false` — **`true` = on To Sell list** |
 | `coverImageUrl`, `notes` | string? | `notes` admin-only in API |
 | `authorId` | FK? → Author | Nullable for wishlist books |
 | `publisherId` | FK? → Publisher | |
 | `createdAt`, `updatedAt` | DateTime | Use `createdAt` for “when added” |
 
-**Indexes:** `title`, `format`, `isPubliclyVisible`, `toPurchase`, `authorId`, `publisherId`
+**Indexes:** `title`, `format`, `isPubliclyVisible`, `toPurchase`, `toSell`, `authorId`, `publisherId`
 
 #### Junction
 
@@ -228,6 +232,7 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 | `20250601120000_book_progress_modes` | *(historical)* — removed later |
 | `20250602120000_remove_reading_tracker` | Drops reading tables/columns; deletes `readingOnly` books |
 | `20250603120000_simplify_book_collection` | Drops bookshelves, `ReadingStatus`, status/date columns |
+| `20250604120000_book_to_sell` | `Book.toSell` boolean + index |
 
 **Apply locally:** `cd server && npx prisma migrate deploy` (stop dev server first on Windows)  
 **Apply on Railway:** `preDeployCommand` in `server/railway.toml`
@@ -254,7 +259,8 @@ This document is the **exhaustive** companion to [GENERAL.md](./GENERAL.md). It 
 |--------------|--------|------------|
 | `library` (default) | `toPurchase = false` | `/admin/books` |
 | `to_purchase` | `toPurchase = true` | `/admin/to-purchase` |
-| `all` | no `toPurchase` filter | — |
+| `to_sell` | `toSell = true` | `/admin/to-sell` |
+| `all` | no collection filter | — |
 
 Optional `visibility`: `all` | `public` | `hidden`
 
@@ -277,7 +283,7 @@ Optional `createdFrom` / `createdTo` (YYYY-MM-DD) filter on `createdAt`.
 |--------|--------|
 | `includePricing: false` | Omits prices (public) |
 | `includePricing: true` | Includes prices + `savings` (integer: `Math.round(purchase − market)`) |
-| `includeAdminFields: true` | Adds `isPubliclyVisible`, `toPurchase`, `notes` |
+| `includeAdminFields: true` | Adds `isPubliclyVisible`, `toPurchase`, `toSell`, `notes` |
 
 ---
 
@@ -323,6 +329,7 @@ Base URL: `/api`. Responses: `{ success, data }` or paginated `{ data, paginatio
 | POST | `/bulk-fetch-isbn` | NDJSON stream |
 | POST | `/bulk-fetch-market-price` | NDJSON stream |
 | POST | `/:id/move-to-library` | Wishlist → library |
+| GET | `/export` | Download `.xlsx`; query `collection=library` \| `to_purchase` \| `to_sell` |
 
 **List query** (`bookListQuerySchema`):
 
@@ -330,9 +337,9 @@ Base URL: `/api`. Responses: `{ success, data }` or paginated `{ data, paginatio
 - `search` — Arabic-insensitive
 - `format`, `binding`, `authorId`, `publisherId`
 - `minPrice`, `maxPrice`, `minPages`, `maxPages`, `yearFrom`, `yearTo`
-- `sortBy`: `title`, `author`, `publisher`, `format`, `binding`, `purchasePrice`, `marketPrice`, `currency`, `numberOfPages`, `yearPublished`, `isbn`, `externalId`, `isPubliclyVisible`, `isGift`, **`createdAt`** (default)
+- `sortBy`: `title`, `author`, `publisher`, `format`, `binding`, `purchasePrice`, `marketPrice`, `currency`, `numberOfPages`, `yearPublished`, `isbn`, `externalId`, `isPubliclyVisible`, `isGift`, `toSell`, **`createdAt`** (default)
 - `sortOrder`: `asc` | `desc`
-- `collection`: `library` | `to_purchase` | `all`
+- `collection`: `library` | `to_purchase` | `to_sell` | `all`
 - `visibility`: `all` | `public` | `hidden`
 - `createdFrom`, `createdTo`
 
@@ -431,7 +438,7 @@ HTTP → helmet, cors, json → rate limit → validate (Zod) → service → pr
 
 ### Book form — Collection section
 
-Only **`toPurchase`** checkbox + **`isPubliclyVisible`**. No status, dates, or bookshelf picker.
+**`toPurchase`**, **`toSell`**, and **`isPubliclyVisible`** checkboxes. No status, dates, or bookshelf picker.
 
 ---
 
@@ -442,7 +449,7 @@ Only **`toPurchase`** checkbox + **`isPubliclyVisible`**. No status, dates, or b
 | Group | Items |
 |-------|-------|
 | Main | Dashboard |
-| Library | Books, To Purchase |
+| Library | Books, To Purchase, To Sell |
 | Catalog | Authors, Publishers |
 | Import | CSV, Bookmory, Goodreads, Recent additions |
 | Tools | Missing info |
@@ -452,8 +459,8 @@ Only **`toPurchase`** checkbox + **`isPubliclyVisible`**. No status, dates, or b
 
 | Component | Role |
 |-----------|------|
-| `BookForm.tsx` | Create/edit; Collection = wishlist checkbox |
-| `AdminBooksList.tsx` | Grid/table toggle, sort, pagination |
+| `BookForm.tsx` | Create/edit; Collection = wishlist + to sell + visibility |
+| `AdminBooksList.tsx` | Grid/table toggle, grid sort dropdown, Excel export, pagination |
 | `AdminBooksTable.tsx` | Inline edit table |
 | `MoveToLibraryModal.tsx` | Wishlist → library |
 | `EntityPicker` / `TagPicker` | Author, publisher, additional authors |
@@ -470,7 +477,8 @@ Shared by `CatalogPage`, `ToPurchaseCatalogPage`, and `AdminBooksList` (grid mod
 | Text slots | `line-clamp` on title (2 lines) and author; reserved metadata footer so rows align |
 | Admin extras | Purchase price + rounded savings badge; **Hidden** badge when not public |
 | Savings display | `Math.round(book.savings)` — never shown with decimals |
-| Admin list wrapper | `AdminBooksList` wraps card in `flex-1`; visibility/delete buttons below (`shrink-0`) |
+| Admin list wrapper | `AdminBooksList` wraps card in `flex-1`; Hide / Mark to sell / Delete below (`shrink-0`) |
+| Grid sort | `GRID_SORT_OPTIONS` in `AdminBooksList` — date, `purchasePrice`, `numberOfPages` (server-side via list API) |
 
 **Edit card layout:** `client/src/components/books/BookCard.tsx` and grid classes on catalog/admin list pages.
 
@@ -483,6 +491,7 @@ Shared by `CatalogPage`, `ToPurchaseCatalogPage`, and `AdminBooksList` (grid mod
 | `DashboardPage.tsx` | Stats charts; library vs wishlist pie; KPIs |
 | `BooksManagePage.tsx` | Library collection |
 | `ToPurchasePage.tsx` | Wishlist collection |
+| `ToSellPage.tsx` | Books marked `toSell: true` |
 | `BookFormPage.tsx` | Shared form for library + wishlist routes |
 | `ImportPage.tsx` | CSV import (no default reading status) |
 | `BookmoryImportPage.tsx` | Bookmory preview/import |
@@ -498,7 +507,7 @@ Shared by `CatalogPage`, `ToPurchaseCatalogPage`, and `AdminBooksList` (grid mod
 | Module | Purpose |
 |--------|---------|
 | `api.ts` | `apiFetch`, `ApiError` |
-| `books.ts` | Book CRUD, list params, bulk fetch streams |
+| `books.ts` | Book CRUD, list params, `downloadBooksExport`, `toggleBookToSell`, bulk fetch streams |
 | `stats.ts` | Dashboard fetchers + TS types |
 | `import.ts` | CSV import |
 | `bookmoryImport.ts` | Bookmory preview/import |
@@ -514,7 +523,7 @@ Shared by `CatalogPage`, `ToPurchaseCatalogPage`, and `AdminBooksList` (grid mod
 
 ### `client/src/types/index.ts`
 
-`Book` includes `toPurchase`, `isGift`, `createdAt` — **no** `status`, dates, `bookshelves`, `readingOnly`.
+`Book` includes `toPurchase`, `toSell`, `isGift`, `createdAt` — **no** `status`, dates, `bookshelves`, `readingOnly`.
 
 ### `client/src/constants/book.ts`
 
@@ -557,7 +566,7 @@ Shared by `CatalogPage`, `ToPurchaseCatalogPage`, and `AdminBooksList` (grid mod
 
 ## 15. Admin table inline editing
 
-**Editable fields:** `title`, `author`, `publisher`, `format`, `binding`, `purchasePrice`, `marketPrice`, `currency`, `numberOfPages`, `yearPublished`, `isbn`, `goodreadsId`, `isPubliclyVisible`, `isGift`
+**Editable fields:** `title`, `author`, `publisher`, `format`, `binding`, `purchasePrice`, `marketPrice`, `currency`, `numberOfPages`, `yearPublished`, `isbn`, `goodreadsId`, `isPubliclyVisible`, `isGift`, `toSell`
 
 **Not in table:** `toPurchase` (use wishlist page or form), `notes`, `coverImageUrl`, `edition`, `isbn13`
 
@@ -712,6 +721,45 @@ npx prisma generate
 
 ---
 
+## 29. Excel export
+
+**UI:** **Download Excel** on Books, To Purchase, and To Sell admin pages (`AdminBooksList.tsx`).
+
+**Client:** `downloadBooksExport(collection)` in `books.ts` — `GET /api/admin/books/export?collection=…`, saves attachment.
+
+**Server:** `bookExportService.exportBooksToXlsx()` — ExcelJS workbook; all books in collection (not paginated).
+
+| `collection` | Filename example | Sheet name | Filter |
+|--------------|------------------|------------|--------|
+| `library` | `library-books-2026-05-24.xlsx` | Library | `toPurchase: false` |
+| `to_purchase` | `to-purchase-books-…` | To Purchase | `toPurchase: true` |
+| `to_sell` | `to-sell-books-…` | To Sell | `toSell: true` |
+
+Columns include title, author, prices, savings (rounded), `toSell`, etc. — see `EXPORT_COLUMNS` in `bookExportService.ts`.
+
+---
+
+## 30. To Sell list
+
+**Flag:** `Book.toSell` (default `false`). Independent of `toPurchase` — a library book can be for sale and still appear under **Books**.
+
+**Admin page:** `/admin/to-sell` → `ToSellPage.tsx` → `AdminBooksList` with `collection="to_sell"`.
+
+**Toggle to sell:**
+
+| Surface | How |
+|---------|-----|
+| Table | **To sell?** column (Yes/No inline edit) |
+| Grid | **Mark to sell** / **Remove from sell** button |
+| Form | **To sell** checkbox in Collection section |
+| API | `PUT /api/admin/books/:id` with `{ toSell: true \| false }` or `toggleBookToSell()` |
+
+**Edit routing:** books on To Sell keep their library or wishlist edit URL (`resolveEditPath` in `AdminBooksList`).
+
+**No public page** for to-sell (admin only).
+
+---
+
 ## Appendix A — Client route → file map
 
 | Route | Component |
@@ -725,6 +773,7 @@ npx prisma generate
 | `/admin/books/new`, `.../edit` | `BookFormPage.tsx` |
 | `/admin/to-purchase` | `ToPurchasePage.tsx` |
 | `/admin/to-purchase/new`, `.../edit` | `BookFormPage.tsx` |
+| `/admin/to-sell` | `ToSellPage.tsx` |
 | `/admin/authors` | `AuthorsPage.tsx` |
 | `/admin/publishers` | `PublishersPage.tsx` |
 | `/admin/import` | `ImportPage.tsx` |

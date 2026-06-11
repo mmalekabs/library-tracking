@@ -76,6 +76,7 @@ export function serializeBook(
         isPubliclyVisible: book.isPubliclyVisible,
         isGift: book.isGift,
         toPurchase: book.toPurchase,
+        toSell: book.toSell,
         notes: book.notes,
       }),
     };
@@ -100,6 +101,8 @@ function buildWhereClause(
     where.toPurchase = publicCollection === "to_purchase";
   } else if (query.collection === "to_purchase") {
     where.toPurchase = true;
+  } else if (query.collection === "to_sell") {
+    where.toSell = true;
   } else if (query.collection === "all") {
     // No collection filter — includes library and wishlist
   } else {
@@ -201,6 +204,8 @@ function buildOrderBy(
       return { isPubliclyVisible: direction };
     case "isGift":
       return { isGift: direction };
+    case "toSell":
+      return { toSell: direction };
     case "createdAt":
     default:
       return { createdAt: direction };
@@ -298,6 +303,7 @@ function bookDataFromInput(
     isPubliclyVisible: input.isPubliclyVisible,
     isGift: input.isGift,
     toPurchase: input.toPurchase,
+    toSell: input.toSell,
     coverImageUrl,
     notes: input.notes,
     authorId,

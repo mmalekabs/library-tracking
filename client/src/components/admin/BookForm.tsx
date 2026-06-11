@@ -48,6 +48,7 @@ interface FormState {
   isPubliclyVisible: boolean;
   isGift: boolean;
   toPurchase: boolean;
+  toSell: boolean;
   coverImageUrl: string;
   notes: string;
 }
@@ -80,6 +81,7 @@ function bookToFormState(book: Book): FormState {
     isPubliclyVisible: book.isPubliclyVisible ?? true,
     isGift: book.isGift ?? false,
     toPurchase: book.toPurchase ?? false,
+    toSell: book.toSell ?? false,
     coverImageUrl: book.coverImageUrl ?? "",
     notes: book.notes ?? "",
   };
@@ -105,6 +107,7 @@ const emptyForm = (toPurchase = false): FormState => ({
   isPubliclyVisible: true,
   isGift: false,
   toPurchase,
+  toSell: false,
   coverImageUrl: "",
   notes: "",
 });
@@ -129,6 +132,7 @@ function formToPayload(form: FormState): Record<string, unknown> {
     isPubliclyVisible: form.isPubliclyVisible,
     isGift: form.isGift,
     toPurchase: form.toPurchase,
+    toSell: form.toSell,
     coverImageUrl: form.coverImageUrl.trim() || null,
     notes: form.notes.trim() || null,
     additionalAuthorIds: form.additionalAuthors
@@ -491,6 +495,18 @@ export function BookForm({
             Checked books appear on the admin <strong>To Purchase</strong> list,
             not under Books. Uncheck when you own the book.
           </p>
+        </div>
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <input
+            id="toSell"
+            type="checkbox"
+            checked={form.toSell}
+            onChange={(e) => set("toSell", e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+          />
+          <label htmlFor="toSell" className="text-sm font-medium text-gray-700">
+            To sell (appears on the admin <strong>To Sell</strong> list)
+          </label>
         </div>
         <div className="flex items-center gap-3 sm:col-span-2">
           <input
