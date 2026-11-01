@@ -2,6 +2,11 @@
 # Same pattern as book-club — one public URL for pages + /api.
 
 FROM node:22-bookworm-slim AS web
+# Home-lab builds often hit flaky npm — retry instead of failing once.
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set fetch-timeout 300000
 WORKDIR /src/client
 COPY client/package.json client/package-lock.json ./
 # Coolify may inject NODE_ENV=production and skip vite (devDependency).
@@ -15,6 +20,10 @@ FROM node:22-bookworm-slim AS app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates openssl \
   && rm -rf /var/lib/apt/lists/*
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set fetch-timeout 300000
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
 # prisma + tsx + typescript needed for generate / migrate / seed / tsc build
