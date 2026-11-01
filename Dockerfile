@@ -20,8 +20,12 @@ RUN set -e; \
   done; \
   test -d node_modules
 COPY client/ ./
-# Same-origin: browser calls /api on this site. Leave empty (do not set VITE_API_URL in Coolify).
-ENV VITE_API_URL=
+# Shared Funnel host with book-club: site lives under this path.
+# Coolify Domain must be: https://bookclub.tail5716a1.ts.net/my-library-tracking-app
+# Coolify strips the path prefix before the container; browser still calls under the path.
+ARG VITE_BASE=/my-library-tracking-app/
+ENV VITE_BASE=$VITE_BASE
+ENV VITE_API_URL=/my-library-tracking-app/api
 RUN npm run build
 
 FROM node:22-bookworm-slim AS app
